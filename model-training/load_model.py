@@ -14,3 +14,5 @@ def load_model(num_attributes):
         nn.Linear(num_features, num_attributes),
         nn.Sigmoid()
     )
+
+    return model
