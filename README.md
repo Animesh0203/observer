@@ -1,5 +1,7 @@
 # README
 
+# THE PROJECT IS STILL UNDER DEVELOPMENT 
+
 ## About
 
 This is the official Wails React template.
