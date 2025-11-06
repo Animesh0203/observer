@@ -6,6 +6,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
 //go:embed all:frontend/dist
@@ -20,11 +21,16 @@ func main() {
 		Title:  "observer",
 		Width:  1024,
 		Height: 768,
+		MinHeight: 768,
+		MinWidth: 768,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
+		Windows: &windows.Options{
+			DisablePinchZoom: true,
+		},
 		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 1},
-		OnStartup:        app.startup,
+		OnStartup:        app.Startup,
 		Bind: []interface{}{
 			app,
 		},

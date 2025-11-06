@@ -2,6 +2,11 @@
 
 import * as React from "react"
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
   AudioWaveform,
   BookOpen,
   Bot,
@@ -15,6 +20,7 @@ import {
   SquareTerminal,
 } from "lucide-react"
 
+import { PopoverSettings } from "@/components/popoverSettings"
 import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
 import { NavUser } from "@/components/nav-user"
@@ -114,9 +120,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain items={data.navMain} />
       </SidebarContent>
       <SidebarFooter>
-        <Button variant="outline" className="justify-start">
-          <Settings/>Settings
-        </Button>
+        <Popover>
+        <PopoverTrigger asChild>
+            <Button variant="outline" className="">
+              <Settings />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent side="right">
+            <PopoverSettings />
+          </PopoverContent>
+        </Popover>
         {/* <NavUser user={data.user} /> */}
       </SidebarFooter>
       <SidebarRail />

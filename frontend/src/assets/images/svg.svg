@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="200 100 500 356" role="img" aria-labelledby="title">
+    <title id="title">ob logo</title>
+    <rect x="245" y="164" width="400" height="256" rx="30" fill="#000" stroke="#000"
+        stroke-width="25" />
+    <text x="300.45" y="294.57" font-family="monospace" font-size="96" fill="#fff"
+        transform="matrix(1.28772 0 0 1.39797 -78.2595 -74.5637)">.ob/</text>
+</svg>

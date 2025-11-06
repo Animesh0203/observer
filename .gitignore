@@ -3,3 +3,4 @@ node_modules
 frontend/dist
 data/
 __pycache__
+data.db
