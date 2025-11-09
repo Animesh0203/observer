@@ -33,7 +33,7 @@ const SearchBar = ({ searchQuery, onSearchChange, isSidebarCollapsed }: SearchBa
       </div>
 
       {/* Action Buttons */}
-      <div className="flex items-center gap-2">
+      <div className="flex justify-end items-center gap-2">
         {/* Filter Button */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

@@ -1,7 +1,7 @@
 export namespace main {
 	
 	export class FolderData {
-	    id: string;
+	    id: number;
 	    name: string;
 	    path: string;
 	
@@ -20,6 +20,7 @@ export namespace main {
 	    id: string;
 	    name: string;
 	    path: string;
+	    folderId: string;
 	    folder: string;
 	    size: number;
 	    // Go type: time
@@ -39,6 +40,7 @@ export namespace main {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.path = source["path"];
+	        this.folderId = source["folderId"];
 	        this.folder = source["folder"];
 	        this.size = source["size"];
 	        this.created = this.convertValues(source["created"], null);

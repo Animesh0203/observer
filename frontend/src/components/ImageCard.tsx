@@ -35,7 +35,7 @@ const ImageCard = ({ image }: ImageCardProps) => {
       {/* Image */}
       <div className="aspect-square bg-gray-100 relative overflow-hidden">
         <img
-          src={image.thumbnail || image.path || 'https://via.placeholder.com/300'}
+          src={`http://127.0.0.1:5178/image?path=${image.path}`}
           alt={image.name}
           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
         />

@@ -14,6 +14,10 @@ export function GetFolders() {
   return window['go']['main']['App']['GetFolders']();
 }
 
+export function GetImageByFolders(arg1) {
+  return window['go']['main']['App']['GetImageByFolders'](arg1);
+}
+
 export function GetImages() {
   return window['go']['main']['App']['GetImages']();
 }
@@ -26,10 +30,14 @@ export function RemoveFolder(arg1) {
   return window['go']['main']['App']['RemoveFolder'](arg1);
 }
 
-export function ScanFolders() {
-  return window['go']['main']['App']['ScanFolders']();
+export function ScanFolder() {
+  return window['go']['main']['App']['ScanFolder']();
 }
 
-export function SelectFolder(arg1) {
-  return window['go']['main']['App']['SelectFolder'](arg1);
+export function ScanFolders(arg1) {
+  return window['go']['main']['App']['ScanFolders'](arg1);
+}
+
+export function SelectFolder() {
+  return window['go']['main']['App']['SelectFolder']();
 }

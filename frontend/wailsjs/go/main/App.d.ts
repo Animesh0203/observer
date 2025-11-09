@@ -8,12 +8,16 @@ export function CaptionImage(arg1:string):Promise<void>;
 
 export function GetFolders():Promise<Array<main.FolderData>>;
 
+export function GetImageByFolders(arg1:Array<string>):Promise<Array<main.ImageData>>;
+
 export function GetImages():Promise<Array<main.ImageData>>;
 
 export function Greet(arg1:string):Promise<string>;
 
 export function RemoveFolder(arg1:string):Promise<void>;
 
-export function ScanFolders():Promise<void>;
+export function ScanFolder():Promise<void>;
 
-export function SelectFolder(arg1:string):Promise<string>;
+export function ScanFolders(arg1:string):Promise<void>;
+
+export function SelectFolder():Promise<string>;

@@ -1,14 +1,13 @@
 // components/Sidebar.tsx
-import { ChevronLeft, ChevronRight, Folder, Image, Star, Clock, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Input } from '@/components/ui/input';
+import { ChevronLeft, ChevronRight, Clock, Folder, Image, Star, Tag } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AddFolder, GetFolders, SelectFolder, ScanFolders, GetImageByFolders } from "../../wailsjs/go/main/App";
 import svg from "../assets/images/svg.svg";
-import { SelectFolder } from "../../wailsjs/go/main/App"
-import { Label } from '@radix-ui/react-label';
-import { useState } from 'react';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -18,30 +17,60 @@ interface SidebarProps {
 }
 
 const Sidebar = ({ isCollapsed, onToggle, selectedFolder, onFolderSelect }: SidebarProps) => {
+
+  const [foldersData, setFoldersData] = useState<any[]>([]);
+
   const menuItems = [
     { id: 'all', label: 'All Images', icon: Image, count: 0 },
     { id: 'favorites', label: 'Favorites', icon: Star, count: 0 },
     { id: 'recent', label: 'Recent', icon: Clock, count: 0 },
-    { id: 'tagged', label: 'Tagged', icon: Tag, count: 0 },
   ];
 
-  const folders = [
-    { id: 'folder1', label: 'Downloads', count: 45 },
-    { id: 'folder2', label: 'Screenshots', count: 23 },
-    { id: 'folder3', label: 'Wallpapers', count: 67 },
-  ];
+useEffect(() => {
+  GetFolders()
+    .then((folders) => {
+      if (Array.isArray(folders) && folders.length > 0) {
+        setFoldersData(folders);
+      } else {
+        console.warn("No folders found or invalid data returned.");
+        setFoldersData([]); // ensure it's always an array
+      }
+    })
+    .catch((err) => {
+      console.error("Failed to fetch folders:", err);
+      setFoldersData([]); // fallback even on error
+    });
+}, []);
+
+const folders = foldersData.map((folder) => ({
+  id: folder.id,
+  label: folder.name,
+  count: folder.path,
+}));
+
 
   const [FolderPath, setFolderPath] = useState<string>("");
   const [FolderName, setFolderName] = useState<string>("");
 
   async function handleSelectFolder() {
-    try {
-      setFolderPath( await SelectFolder(FolderName) );
-    } 
-    catch (err) {
-        console.error("Error Selecting Folder:", err);
-    }
+  try {
+    const folderPath = await SelectFolder(); // just open dialog
+    setFolderPath(folderPath);
+  } catch (err) {
+    console.error("Error selecting folder:", err);
   }
+}
+
+async function handleAddFolder() {
+  try {
+    await AddFolder(FolderName, FolderPath);
+    await ScanFolders(FolderPath);
+    const folders = await GetFolders();
+    setFoldersData(folders);
+  } catch (err) {
+    console.error("Error adding folder:", err);
+  }
+}
 
   return (
     <div
@@ -113,17 +142,17 @@ const Sidebar = ({ isCollapsed, onToggle, selectedFolder, onFolderSelect }: Side
               {folders.map((folder) => (
                 <button
                   key={folder.id}
-                  onClick={() => onFolderSelect(folder.id)}
+                  onClick={() => onFolderSelect(String(folder.id))}
                   className={cn(
                     'w-full flex items-center px-3 py-2 rounded-lg transition-colors',
-                    selectedFolder === folder.id
+                    selectedFolder === String(folder.id)
                       ? 'bg-blue-50 text-gray-600'
                     : 'text-gray-900 hover:bg-gray-200',
                   )}
                 >
                   <Folder className="h-5 w-5 flex-shrink-0" />
                   <span className="ml-3 font-medium">{folder.label}</span>
-                  <span className="ml-auto text-sm text-gray-500">{folder.count}</span>
+                  {/* <span className="ml-auto text-sm text-gray-500">{folder.count}</span> */}
                 </button>
               ))}
             </div>
@@ -161,15 +190,17 @@ const Sidebar = ({ isCollapsed, onToggle, selectedFolder, onFolderSelect }: Side
                 Add Folder
               </Button>
             </PopoverTrigger>
-            <PopoverContent side="right" alignOffset={15} sideOffset={15}>
-              <Button className='w-full mb-3' onClick={handleSelectFolder}>
-                Choose Folder
-              </Button>
-              <Input disabled type="text" className='ghost mb-3' value={FolderPath} placeholder='Folder Path' />
-              <Input onChange={(e) => setFolderName(e.target.value)} placeholder="Folder name" />
-              <Button variant="outline" className="w-full mt-2" size="sm">
-                Create Folder
-              </Button>
+            <PopoverContent className='ml-4 mb-4' side="right" >
+              <Button className="w-full mb-3" onClick={handleSelectFolder}>
+  Choose Folder
+</Button>
+
+<Input className='mb-3' disabled value={FolderPath} placeholder="Folder Path" />
+<Input onChange={(e) => setFolderName(e.target.value)} placeholder="Folder Name" />
+
+<Button variant="outline" className="w-full mt-2" size="sm" onClick={handleAddFolder}>
+  Create Folder
+</Button>
             </PopoverContent>
           </Popover>
         </div>

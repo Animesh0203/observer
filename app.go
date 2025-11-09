@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +31,7 @@ type ImageData struct {
 	ID       string    `json:"id"`
 	Name     string    `json:"name"`
 	Path     string    `json:"path"`
+	FolderID string    `json:"folderId"` 
 	Folder   string    `json:"folder"`
 	Size     int64     `json:"size"`
 	Created  time.Time `json:"created"`
@@ -39,7 +42,7 @@ type ImageData struct {
 }
 
 type FolderData struct {
-	ID   string `json:"id"`
+	ID   int    `json:"id"`
 	Name string `json:"name"`
 	Path string `json:"path"`
 }
@@ -79,13 +82,16 @@ func fileMetadata(path string) (name string, size int64, created, modified time.
 // so we can call the runtime methods
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+	if _, err := os.Stat("./"); os.IsNotExist(err) {
+		os.MkdirAll("./", 0755)
+	}
 	db, err := sql.Open("sqlite", "./data.db")
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	a.db = db
 	a.initDB()
+	go a.startImageServer()
 }
 
 // initDB initializes the database schema
@@ -93,14 +99,17 @@ func (a *App) initDB() {
 	_, _ = a.db.Exec(`
         CREATE TABLE IF NOT EXISTS folders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT UNIQUE,
+            name TEXT UNIQUE,
             path TEXT UNIQUE
         );
+
         CREATE TABLE IF NOT EXISTS images (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			path TEXT UNIQUE,
-			caption TEXT
-		);
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            path TEXT UNIQUE,
+            caption TEXT,
+            folder_id INTEGER,
+            FOREIGN KEY (folder_id) REFERENCES folders(id)
+        );
     `)
 }
 
@@ -109,20 +118,30 @@ func (a *App) Greet(name string) string {
 	return fmt.Sprintf("Hello %s, It's show time!", name)
 }
 
-
 func (a *App) AddFolder(name string, path string) error {
-	// Placeholder for future implementation
-	_, err := a.db.Exec("INSERT OR IGNORE INTO folders (name, path) VALUES (?, ?)", name, path)
-	return err
+	if name == "" || path == "" {
+		return errors.New("folder name and path cannot be empty")
+	}
+
+	_, err := a.db.Exec("INSERT INTO folders (name, path) VALUES (?, ?)", name, path)
+	if err != nil {
+		runtime.LogError(a.ctx, fmt.Sprintf("Failed to add folder: %v", err))
+		return err
+	}
+
+	runtime.LogInfo(a.ctx, fmt.Sprintf("Added folder: %s (%s)", name, path))
+	return nil
 }
 
-func (a *App) SelectFolder(name string) (string, error) {
+// SelectFolder opens a folder picker dialog and returns the selected path.
+func (a *App) SelectFolder() (string, error) {
 	options := runtime.OpenDialogOptions{
 		Title: "Select a folder",
 	}
 
 	folderPath, err := runtime.OpenDirectoryDialog(a.ctx, options)
 	if err != nil {
+		runtime.LogError(a.ctx, fmt.Sprintf("Error selecting folder: %v", err))
 		return "", err
 	}
 
@@ -130,8 +149,7 @@ func (a *App) SelectFolder(name string) (string, error) {
 		return "", fmt.Errorf("no folder selected")
 	}
 
-	fmt.Println("Selected folder:", folderPath)
-	a.AddFolder(name, folderPath)
+	runtime.LogInfo(a.ctx, fmt.Sprintf("Selected folder: %s", folderPath))
 	return folderPath, nil
 }
 
@@ -141,7 +159,7 @@ func (a *App) RemoveFolder(path string) error {
 	return err
 }
 
-func (a *App) ScanFolders() error {
+func (a *App) ScanFolder() error {
 	rows, err := a.db.Query("SELECT id, path FROM folders")
 	if err != nil {
 		return err
@@ -152,24 +170,78 @@ func (a *App) ScanFolders() error {
 		var id int
 		var folderPath string
 		rows.Scan(&id, &folderPath)
-		a.scanFolder(id, folderPath)
+		a.ScanFolders(folderPath)
 	}
 	return nil
 }
 
-func (a *App) scanFolder(folderID int, folderPath string) {
-	filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
+func (a *App) startImageServer() {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/image", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("path")
+		if q == "" {
+			http.Error(w, "Missing path", http.StatusBadRequest)
+			return
+		}
+
+		// Normalize Windows paths safely
+		q = strings.ReplaceAll(q, "\\", "/")
+		absPath, err := filepath.Abs(q)
 		if err != nil {
+			http.Error(w, "Invalid path", http.StatusBadRequest)
+			return
+		}
+
+		http.ServeFile(w, r, absPath)
+	})
+
+	// Start HTTP server on localhost, random free port (or fixed, like 127.0.0.1:5178)
+	http.ListenAndServe("127.0.0.1:5178", mux)
+}
+
+func (a *App) ScanFolders(path string) error {
+	// Find folder ID
+	var folderID int
+	err := a.db.QueryRow("SELECT id FROM folders WHERE path = ?", path).Scan(&folderID)
+	if err != nil {
+		return fmt.Errorf("folder not found in database: %v", err)
+	}
+
+	tx, err := a.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	stmt, err := tx.Prepare("INSERT OR IGNORE INTO images (path, folder_id) VALUES (?, ?)")
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to prepare insert: %v", err)
+	}
+	defer stmt.Close()
+
+	err = filepath.Walk(path, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			runtime.LogError(a.ctx, fmt.Sprintf("Error accessing %s: %v", filePath, err))
 			return nil
 		}
-		if !info.IsDir() && isImage(path) {
-			_, _ = a.db.Exec(
-				"INSERT OR IGNORE INTO images (path, folder_id) VALUES (?, ?)",
-				path, folderID,
-			)
+		if !info.IsDir() && isImage(filePath) {
+			_, err := stmt.Exec(filePath, folderID)
+			if err != nil {
+				runtime.LogError(a.ctx, fmt.Sprintf("Failed to insert image: %v", err))
+			}
 		}
 		return nil
 	})
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error walking folder: %v", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	runtime.LogInfo(a.ctx, fmt.Sprintf("Finished scanning folder: %s", path))
+	return nil
 }
 
 func isImage(p string) bool {
@@ -179,6 +251,7 @@ func isImage(p string) bool {
 
 func (a *App) CaptionImage(imagePath string) {
 	// Placeholder for future implementation
+
 }
 
 func (a *App) GetImages() ([]ImageData, error) {
@@ -218,8 +291,71 @@ func (a *App) GetImages() ([]ImageData, error) {
 	return out, nil
 }
 
+func (a *App) GetImageByFolders(folderIDs []string) ([]ImageData, error) {
+	if len(folderIDs) == 0 {
+		return a.GetImages()
+	}
+
+	// Generate placeholders for SQL (?,?,?,...)
+	placeholders := strings.Repeat("?,", len(folderIDs))
+	placeholders = strings.TrimRight(placeholders, ",")
+
+	query := fmt.Sprintf(`
+		SELECT 
+			images.id, 
+			images.path, 
+			COALESCE(images.caption, ''),
+			folders.id AS folder_id,
+			folders.name AS folder_name,
+			folders.path AS folder_path
+		FROM images 
+		JOIN folders ON images.folder_id = folders.id
+		WHERE folders.id IN (%s)
+	`, placeholders)
+
+	// Convert []string to []interface{} for Query args
+	args := make([]interface{}, len(folderIDs))
+	for i, v := range folderIDs {
+		args[i] = v
+	}
+
+	rows, err := a.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []ImageData
+	for rows.Next() {
+		var id int
+		var path, caption, folderPath, folderName string
+		var folderID int
+
+		err := rows.Scan(&id, &path, &caption, &folderID, &folderName, &folderPath)
+		if err != nil {
+			return nil, err
+		}
+
+		name, size, created, modified, width, height, _ := fileMetadata(path)
+
+		out = append(out, ImageData{
+			ID:       fmt.Sprint(id),
+			Name:     name,
+			Path:     path,
+			Folder:   folderName, // readable folder name
+			FolderID: fmt.Sprint(folderID),
+			Size:     size,
+			Created:  created,
+			Modified: modified,
+			Width:    width,
+			Height:   height,
+		})
+	}
+	return out, nil
+}
+
 func (a *App) GetFolders() ([]FolderData, error) {
-	rows, err := a.db.Query("SELECT id, name, path FROM folders")
+	rows, err := a.db.Query("SELECT id, name, path FROM folders;")
 	if err != nil {
 		return nil, err
 	}
@@ -227,15 +363,16 @@ func (a *App) GetFolders() ([]FolderData, error) {
 
 	var out []FolderData
 	for rows.Next() {
-		var id int
-		var name, path string
-		rows.Scan(&id, &name, &path)
-
-		out = append(out, FolderData{
-			ID:   fmt.Sprint(id),
-			Name: name,
-			Path: path,
-		})
+		var folder FolderData
+		if err := rows.Scan(&folder.ID, &folder.Name, &folder.Path); err != nil {
+			return nil, err
+		}
+		out = append(out, folder)
 	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return out, nil
 }
