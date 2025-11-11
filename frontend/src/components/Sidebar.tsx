@@ -4,9 +4,9 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { ChevronLeft, ChevronRight, Clock, Folder, Image, Star, Tag } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Folder, Image, Star, Tag } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { AddFolder, GetFolders, SelectFolder, ScanFolders, GetImageByFolders } from "../../wailsjs/go/main/App";
+import { AddFolder, GetFolders, ScanFolders, SelectFolder } from "../../wailsjs/go/main/App";
 import svg from "../assets/images/svg.svg";
 
 interface SidebarProps {
@@ -23,7 +23,7 @@ const Sidebar = ({ isCollapsed, onToggle, selectedFolder, onFolderSelect }: Side
   const menuItems = [
     { id: 'all', label: 'All Images', icon: Image, count: 0 },
     { id: 'favorites', label: 'Favorites', icon: Star, count: 0 },
-    { id: 'recent', label: 'Recent', icon: Clock, count: 0 },
+    { id: 'untagged', label: 'Untagged', icon: Tag, count: 0 },
   ];
 
 useEffect(() => {
@@ -199,7 +199,7 @@ async function handleAddFolder() {
 <Input onChange={(e) => setFolderName(e.target.value)} placeholder="Folder Name" />
 
 <Button variant="outline" className="w-full mt-2" size="sm" onClick={handleAddFolder}>
-  Create Folder
+  Add Folder
 </Button>
             </PopoverContent>
           </Popover>

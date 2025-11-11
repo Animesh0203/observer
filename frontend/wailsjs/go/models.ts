@@ -20,6 +20,7 @@ export namespace main {
 	    id: string;
 	    name: string;
 	    path: string;
+	    thumbnailPath: string;
 	    folderId: string;
 	    folder: string;
 	    size: number;
@@ -40,6 +41,7 @@ export namespace main {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.path = source["path"];
+	        this.thumbnailPath = source["thumbnailPath"];
 	        this.folderId = source["folderId"];
 	        this.folder = source["folder"];
 	        this.size = source["size"];

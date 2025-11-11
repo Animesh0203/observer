@@ -2,7 +2,7 @@ export interface ImageData {
   id: string;
   name: string;
   path: string;
-  thumbnail?: string;
+  thumbnailPath?: string;
   folder: string;
   size: number;
   created: Date;

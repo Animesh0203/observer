@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { GetImageByFolders, GetImages } from '../wailsjs/go/main/App';
+import { GetImageByFolders, GetImages, UnTaggedImages} from '../wailsjs/go/main/App';
 import ImageGrid from './components/ImageGrid';
 import SearchBar from './components/SearchBar';
 import Sidebar from './components/Sidebar';
@@ -25,7 +25,10 @@ useEffect(() => { fetchImages(selectedFolder) }, [selectedFolder]);
       let data;
       if (folderId === 'all') {
         data = await GetImages();
-      } else {
+      } else if(folderId === 'untagged') {
+        data = await UnTaggedImages();
+      } 
+      else {
         data = await GetImageByFolders([folderId]);
       }
       setImages(Array.isArray(data) ? data : []);

@@ -41,3 +41,11 @@ export function ScanFolders(arg1) {
 export function SelectFolder() {
   return window['go']['main']['App']['SelectFolder']();
 }
+
+export function Shutdown(arg1) {
+  return window['go']['main']['App']['Shutdown'](arg1);
+}
+
+export function UnTaggedImages() {
+  return window['go']['main']['App']['UnTaggedImages']();
+}

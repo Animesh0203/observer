@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"github.com/disintegration/imaging"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -28,17 +29,18 @@ type App struct {
 }
 
 type ImageData struct {
-	ID       string    `json:"id"`
-	Name     string    `json:"name"`
-	Path     string    `json:"path"`
-	FolderID string    `json:"folderId"` 
-	Folder   string    `json:"folder"`
-	Size     int64     `json:"size"`
-	Created  time.Time `json:"created"`
-	Modified time.Time `json:"modified"`
-	Width    int       `json:"width"`
-	Height   int       `json:"height"`
-	Tags     []string  `json:"tags,omitempty"`
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Path          string    `json:"path"`
+	ThumbnailPath string    `json:"thumbnailPath"`
+	FolderID      string    `json:"folderId"`
+	Folder        string    `json:"folder"`
+	Size          int64     `json:"size"`
+	Created       time.Time `json:"created"`
+	Modified      time.Time `json:"modified"`
+	Width         int       `json:"width"`
+	Height        int       `json:"height"`
+	Tags          []string  `json:"tags,omitempty"`
 }
 
 type FolderData struct {
@@ -78,6 +80,32 @@ func fileMetadata(path string) (name string, size int64, created, modified time.
 	return name, size, created, fi.ModTime(), width, height, nil
 }
 
+func GenerateThumbnail(srcPath, thumbDir string, width int) (string, error) {
+	if err := os.MkdirAll(thumbDir, 0755); err != nil {
+		return "", err
+	}
+
+	filename := strings.TrimSuffix(filepath.Base(srcPath), filepath.Ext(srcPath)) + ".jpg"
+	thumbPath := filepath.Join(thumbDir, filename)
+
+	if _, err := os.Stat(thumbPath); err == nil {
+		return thumbPath, nil
+	}
+
+	img, err := imaging.Open(srcPath)
+	if err != nil {
+		return "", err
+	}
+
+	thumb := imaging.Resize(img, width, 0, imaging.Lanczos)
+
+	if err := imaging.Save(thumb, thumbPath, imaging.JPEGQuality(70)); err != nil {
+		return "", err
+	}
+
+	return thumbPath, nil
+}
+
 // startup is called when the app starts. The context is saved
 // so we can call the runtime methods
 func (a *App) Startup(ctx context.Context) {
@@ -96,6 +124,10 @@ func (a *App) Startup(ctx context.Context) {
 
 // initDB initializes the database schema
 func (a *App) initDB() {
+
+	a.db.Exec("PRAGMA journal_mode=WAL;")
+	a.db.Exec("PRAGMA synchronous=NORMAL;")
+
 	_, _ = a.db.Exec(`
         CREATE TABLE IF NOT EXISTS folders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -106,14 +138,51 @@ func (a *App) initDB() {
         CREATE TABLE IF NOT EXISTS images (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             path TEXT UNIQUE,
+			thumbnail_path TEXT,
             caption TEXT,
             folder_id INTEGER,
             FOREIGN KEY (folder_id) REFERENCES folders(id)
         );
+
+		CREATE TABLE IF NOT EXISTS FAVORITES (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			image_id INTEGER,
+			FOREIGN KEY (image_id) REFERENCES images(id)
+		);
+
+		CREATE TABLE IF NOT EXISTS UNTAGGED (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			image_id INTEGER,
+			FOREIGN KEY (image_id) REFERENCES images(id)
+		);
     `)
 }
 
-// Greet returns a greeting for the given name
+func (a *App) UnTaggedImages() ([]ImageData, error) {
+	// Function that puts untagged images into UNTAGGED table
+	rows, err := a.db.Query(`
+		SELECT images.id, images.path
+		FROM images
+		WHERE caption IS NULL
+	`)
+	if err != nil {
+		runtime.LogError(a.ctx, fmt.Sprintf("Error querying untagged images: %v", err))
+		return nil, err
+	}
+	defer rows.Close()
+	var images []ImageData
+	for rows.Next() {
+		var img ImageData
+		if err := rows.Scan(&img.ID, &img.Path); err != nil {
+			runtime.LogError(a.ctx, fmt.Sprintf("Error scanning untagged image: %v", err))
+			continue
+		}
+		images = append(images, img)
+	}
+	return images, nil
+}
+
+// THE OG FUNCTION
 func (a *App) Greet(name string) string {
 	return fmt.Sprintf("Hello %s, It's show time!", name)
 }
@@ -199,6 +268,24 @@ func (a *App) startImageServer() {
 	http.ListenAndServe("127.0.0.1:5178", mux)
 }
 
+func (a *App) walkFolderAndInsertImages(folderPath string, folderID int, stmt *sql.Stmt) error {
+	return filepath.Walk(folderPath, func(filePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			if !os.IsNotExist(err) && !os.IsPermission(err) {
+				runtime.LogError(a.ctx, fmt.Sprintf("Error accessing %s: %v", filePath, err))
+			}
+			return nil
+		}
+		if !info.IsDir() && isImage(filePath) {
+			_, err := stmt.Exec(filePath, folderID)
+			if err != nil {
+				runtime.LogError(a.ctx, fmt.Sprintf("Failed to insert image: %v", err))
+			}
+		}
+		return nil
+	})
+}
+
 func (a *App) ScanFolders(path string) error {
 	// Find folder ID
 	var folderID int
@@ -218,19 +305,7 @@ func (a *App) ScanFolders(path string) error {
 	}
 	defer stmt.Close()
 
-	err = filepath.Walk(path, func(filePath string, info os.FileInfo, err error) error {
-		if err != nil {
-			runtime.LogError(a.ctx, fmt.Sprintf("Error accessing %s: %v", filePath, err))
-			return nil
-		}
-		if !info.IsDir() && isImage(filePath) {
-			_, err := stmt.Exec(filePath, folderID)
-			if err != nil {
-				runtime.LogError(a.ctx, fmt.Sprintf("Failed to insert image: %v", err))
-			}
-		}
-		return nil
-	})
+	err = a.walkFolderAndInsertImages(path, folderID, stmt)
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("error walking folder: %v", err)
@@ -269,17 +344,25 @@ func (a *App) GetImages() ([]ImageData, error) {
 	defer rows.Close()
 
 	var out []ImageData
+	thumbDir := "./thumbnails"
+
 	for rows.Next() {
 		var id int
 		var path, caption, folder string
 		rows.Scan(&id, &path, &caption, &folder)
 
 		name, size, created, modified, width, height, _ := fileMetadata(path)
+		
+		var thumbPath string
+		if _, err := os.Stat(path); err == nil {
+			thumbPath, _ = GenerateThumbnail(path, thumbDir, 200)
+		}
 
 		out = append(out, ImageData{
 			ID:       fmt.Sprint(id),
 			Name:     name,
 			Path:     path,
+			ThumbnailPath: thumbPath,
 			Folder:   folder,
 			Size:     size,
 			Created:  created,
@@ -326,6 +409,8 @@ func (a *App) GetImageByFolders(folderIDs []string) ([]ImageData, error) {
 	defer rows.Close()
 
 	var out []ImageData
+	thumbDir := "./thumbnails"
+
 	for rows.Next() {
 		var id int
 		var path, caption, folderPath, folderName string
@@ -336,13 +421,20 @@ func (a *App) GetImageByFolders(folderIDs []string) ([]ImageData, error) {
 			return nil, err
 		}
 
+		
 		name, size, created, modified, width, height, _ := fileMetadata(path)
+
+		var thumbPath string
+		if _, err := os.Stat(path); err == nil {
+			thumbPath, _ = GenerateThumbnail(path, thumbDir, 200)
+		}
 
 		out = append(out, ImageData{
 			ID:       fmt.Sprint(id),
 			Name:     name,
 			Path:     path,
-			Folder:   folderName, // readable folder name
+			ThumbnailPath: thumbPath,
+			Folder:   folderName,
 			FolderID: fmt.Sprint(folderID),
 			Size:     size,
 			Created:  created,
@@ -375,4 +467,10 @@ func (a *App) GetFolders() ([]FolderData, error) {
 	}
 
 	return out, nil
+}
+
+func (a *App) Shutdown(ctx context.Context) {
+	if a.db != nil {
+		a.db.Close()
+	}
 }
