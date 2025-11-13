@@ -1,8 +1,10 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+
   "organizeImports": {
     "enabled": true
   },
+
   "linter": {
     "enabled": true,
     "rules": {
@@ -13,19 +15,25 @@
       "suspicious": {
         "noExplicitAny": "warn"
       },
+
       "style": {
         "useConst": "error",
         "useTemplate": "error"
       }
-    }
+    },
+
+    "ignore": ["wailsjs/**"]
   },
+
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
     "indentWidth": 2,
     "lineWidth": 100,
-    "formatWithErrors": true
+    "formatWithErrors": true,
+    "ignore": ["wailsjs/**"]
   },
+
   "javascript": {
     "formatter": {
       "quoteStyle": "double",
