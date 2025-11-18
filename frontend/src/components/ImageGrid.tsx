@@ -6,7 +6,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface ImageGridProps {
   images: ImageData[];
-  onImagesLoad: (images: ImageData[]) => void;
 }
 
 const ImageGrid = ({ images }: ImageGridProps) => {
