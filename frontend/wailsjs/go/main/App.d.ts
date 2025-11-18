@@ -5,7 +5,7 @@ import {context} from '../models';
 
 export function AddFolder(arg1:string,arg2:string):Promise<void>;
 
-export function CaptionImage(arg1:string):Promise<void>;
+export function CaptionImage(arg1:string):Promise<Array<string>>;
 
 export function GetFolders():Promise<Array<main.FolderData>>;
 
@@ -14,6 +14,8 @@ export function GetImageByFolders(arg1:Array<string>):Promise<Array<main.ImageDa
 export function GetImages():Promise<Array<main.ImageData>>;
 
 export function Greet(arg1:string):Promise<string>;
+
+export function QueueAllUntaggedForTagging():Promise<void>;
 
 export function RemoveFolder(arg1:string):Promise<void>;
 
@@ -24,5 +26,7 @@ export function ScanFolders(arg1:string):Promise<void>;
 export function SelectFolder():Promise<string>;
 
 export function Shutdown(arg1:context.Context):Promise<void>;
+
+export function TagAllUntagged():Promise<void>;
 
 export function UnTaggedImages():Promise<Array<main.ImageData>>;

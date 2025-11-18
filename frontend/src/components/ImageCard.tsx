@@ -114,7 +114,7 @@ const ImageCard = ({ image }: ImageCardProps) => {
         <p className="text-xs text-gray-500 mt-1">
           {formatFileSize(image.size)}
         </p>
-        {image.tags && image.tags.length > 0 && (
+        {image.tags && image.tags.length > 1 && (
           <div className="flex flex-wrap gap-1 mt-2">
             {image.tags.slice(0, 2).map((tag, idx) => (
               <span

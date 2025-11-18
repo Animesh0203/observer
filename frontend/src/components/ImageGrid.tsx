@@ -9,11 +9,11 @@ interface ImageGridProps {
   onImagesLoad: (images: ImageData[]) => void;
 }
 
-const ImageGrid = ({ images, onImagesLoad }: ImageGridProps) => {
+const ImageGrid = ({ images }: ImageGridProps) => {
 
-  useEffect(() => {
-    onImagesLoad(images);
-  }, [images, onImagesLoad]);
+  // useEffect(() => {
+  //   onImagesLoad(images);
+  // }, [images, onImagesLoad]);
 
   return (
     <ScrollArea className="flex-1 p-6">

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os/exec"
 	"database/sql"
 	"errors"
 	"image"
@@ -13,6 +14,10 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"sync"
+	goruntime "runtime"
+
 	"github.com/disintegration/imaging"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -26,6 +31,12 @@ import (
 type App struct {
 	ctx context.Context
 	db  *sql.DB
+
+	labels  []string
+
+	tagJobs chan string
+	wg      sync.WaitGroup
+	inferMu sync.Mutex
 }
 
 type ImageData struct {
@@ -47,6 +58,11 @@ type FolderData struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
 	Path string `json:"path"`
+}
+
+type Prediction struct {
+	Label string
+	Prob  float32
 }
 
 // NewApp creates a new App application struct
@@ -106,10 +122,19 @@ func GenerateThumbnail(srcPath, thumbDir string, width int) (string, error) {
 	return thumbPath, nil
 }
 
+
+func loadLabels(path string) []string {
+	b, _ := os.ReadFile(path)
+	lines := strings.Split(string(b), "\n")
+	return lines
+}
+
 // startup is called when the app starts. The context is saved
 // so we can call the runtime methods
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// DB
 	if _, err := os.Stat("./"); os.IsNotExist(err) {
 		os.MkdirAll("./", 0755)
 	}
@@ -119,7 +144,38 @@ func (a *App) Startup(ctx context.Context) {
 	}
 	a.db = db
 	a.initDB()
+
+	
+
+	workerCount := goruntime.NumCPU()
+	a.tagJobs = make(chan string, 256)
+
+	for i := 0; i < workerCount; i++ {
+		a.wg.Add(1)
+		go a.tagWorker(i)
+	}
+
 	go a.startImageServer()
+}
+
+// tagWorker processes images from the tagJobs channel
+func (a *App) tagWorker(id int) {
+	defer a.wg.Done()
+	for {
+		select {
+		case <-a.ctx.Done():
+			runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d shutting down", id))
+			return
+		case imgPath, ok := <-a.tagJobs:
+			if !ok {
+				runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d channel closed", id))
+				return
+			}
+			runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d processing: %s", id, imgPath))
+			tags := a.CaptionImage(imgPath)
+			runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d finished: %s with tags %v", id, imgPath, tags))
+		}
+	}
 }
 
 // initDB initializes the database schema
@@ -149,38 +205,52 @@ func (a *App) initDB() {
 			image_id INTEGER,
 			FOREIGN KEY (image_id) REFERENCES images(id)
 		);
-
-		CREATE TABLE IF NOT EXISTS UNTAGGED (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			image_id INTEGER,
-			FOREIGN KEY (image_id) REFERENCES images(id)
-		);
     `)
 }
 
 func (a *App) UnTaggedImages() ([]ImageData, error) {
-	// Function that puts untagged images into UNTAGGED table
-	rows, err := a.db.Query(`
-		SELECT images.id, images.path
-		FROM images
-		WHERE caption IS NULL
-	`)
-	if err != nil {
-		runtime.LogError(a.ctx, fmt.Sprintf("Error querying untagged images: %v", err))
-		return nil, err
-	}
-	defer rows.Close()
-	var images []ImageData
-	for rows.Next() {
-		var img ImageData
-		if err := rows.Scan(&img.ID, &img.Path); err != nil {
-			runtime.LogError(a.ctx, fmt.Sprintf("Error scanning untagged image: %v", err))
-			continue
-		}
-		images = append(images, img)
-	}
-	return images, nil
+    rows, err := a.db.Query(`
+        SELECT images.id, images.path, images.thumbnail_path
+        FROM images
+        WHERE caption IS NULL
+    `)
+    if err != nil {
+        runtime.LogError(a.ctx, fmt.Sprintf("Error querying untagged images: %v", err))
+        return nil, err
+    }
+    defer rows.Close()
+
+    var images []ImageData
+
+    for rows.Next() {
+        var id int
+        var path, thumbPath string
+
+        // ✔ First scan values
+        if err := rows.Scan(&id, &path, &thumbPath); err != nil {
+            runtime.LogError(a.ctx, fmt.Sprintf("Error scanning row: %v", err))
+            continue
+        }
+
+        // ✔ Now fetch metadata using correct path
+        name, size, created, modified, width, height, _ := fileMetadata(path)
+
+        images = append(images, ImageData{
+            ID:            fmt.Sprint(id),
+            Path:          path,
+            ThumbnailPath: thumbPath,
+            Name:          name,
+            Size:          size,
+            Created:       created,
+            Modified:      modified,
+            Width:         width,
+            Height:        height,
+        })
+    }
+
+    return images, nil
 }
+
 
 // THE OG FUNCTION
 func (a *App) Greet(name string) string {
@@ -324,9 +394,51 @@ func isImage(p string) bool {
 	return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp"
 }
 
-func (a *App) CaptionImage(imagePath string) {
-	// Placeholder for future implementation
+func (a *App) CaptionImage(imagePath string) []string {
+    cmd := exec.Command("python", "python/tag.py", imagePath)
 
+    out, err := cmd.Output()
+    if err != nil {
+        runtime.LogError(a.ctx, "Python inference failed: "+err.Error())
+        return []string{}
+    }
+
+    tags := strings.Split(strings.TrimSpace(string(out)), ",")
+
+    // Save to DB
+    _, err = a.db.Exec(`UPDATE images SET caption=? WHERE path=?`,
+        strings.Join(tags, ","), imagePath)
+    if err != nil {
+        runtime.LogError(a.ctx, "DB update failed: "+err.Error())
+    }
+
+    return tags
+}
+
+func (a *App) QueueAllUntaggedForTagging() error {
+	images, err := a.UnTaggedImages()
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for _, img := range images {
+			select {
+			case <-a.ctx.Done():
+				return
+			case a.tagJobs <- img.Path:
+				// queued
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (a *App) TagAllUntagged() {
+	if err := a.QueueAllUntaggedForTagging(); err != nil {
+		runtime.LogError(a.ctx, "Failed to queue untagged images: "+err.Error())
+	}
 }
 
 func (a *App) GetImages() ([]ImageData, error) {
@@ -352,23 +464,26 @@ func (a *App) GetImages() ([]ImageData, error) {
 		rows.Scan(&id, &path, &caption, &folder)
 
 		name, size, created, modified, width, height, _ := fileMetadata(path)
-		
+
 		var thumbPath string
 		if _, err := os.Stat(path); err == nil {
 			thumbPath, _ = GenerateThumbnail(path, thumbDir, 200)
+			//Insert thumbnail path into DB
+			_, _ = a.db.Exec("UPDATE images SET thumbnail_path = ? WHERE id = ?", thumbPath, id)
 		}
 
 		out = append(out, ImageData{
-			ID:       fmt.Sprint(id),
-			Name:     name,
-			Path:     path,
+			ID:            fmt.Sprint(id),
+			Name:          name,
+			Path:          path,
 			ThumbnailPath: thumbPath,
-			Folder:   folder,
-			Size:     size,
-			Created:  created,
-			Modified: modified,
-			Width:    width,
-			Height:   height,
+			Folder:        folder,
+			Size:          size,
+			Created:       created,
+			Modified:      modified,
+			Width:         width,
+			Height:        height,
+			Tags:          strings.Split(caption, ","),
 		})
 	}
 	return out, nil
@@ -421,7 +536,6 @@ func (a *App) GetImageByFolders(folderIDs []string) ([]ImageData, error) {
 			return nil, err
 		}
 
-		
 		name, size, created, modified, width, height, _ := fileMetadata(path)
 
 		var thumbPath string
@@ -430,17 +544,17 @@ func (a *App) GetImageByFolders(folderIDs []string) ([]ImageData, error) {
 		}
 
 		out = append(out, ImageData{
-			ID:       fmt.Sprint(id),
-			Name:     name,
-			Path:     path,
+			ID:            fmt.Sprint(id),
+			Name:          name,
+			Path:          path,
 			ThumbnailPath: thumbPath,
-			Folder:   folderName,
-			FolderID: fmt.Sprint(folderID),
-			Size:     size,
-			Created:  created,
-			Modified: modified,
-			Width:    width,
-			Height:   height,
+			Folder:        folderName,
+			FolderID:      fmt.Sprint(folderID),
+			Size:          size,
+			Created:       created,
+			Modified:      modified,
+			Width:         width,
+			Height:        height,
 		})
 	}
 	return out, nil

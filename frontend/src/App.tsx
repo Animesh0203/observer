@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { GetImageByFolders, GetImages, UnTaggedImages} from '../wailsjs/go/main/App';
+import { GetImageByFolders, GetImages, UnTaggedImages } from '../wailsjs/go/main/App';
 import ImageGrid from './components/ImageGrid';
 import SearchBar from './components/SearchBar';
 import Sidebar from './components/Sidebar';
@@ -11,26 +11,26 @@ function App() {
   const [images, setImages] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Initial load
-useEffect(() => { fetchImages(selectedFolder) }, [selectedFolder]);
-
   // 🔹 Fetch images whenever selected folder changes
   useEffect(() => {
     fetchImages(selectedFolder);
   }, [selectedFolder]);
 
+  // 🚀 Clean & correct fetchImages function
   async function fetchImages(folderId: string) {
     setLoading(true);
+
     try {
       let data;
+
       if (folderId === 'all') {
         data = await GetImages();
-      } else if(folderId === 'untagged') {
+      } else if (folderId === 'untagged') {
         data = await UnTaggedImages();
-      } 
-      else {
+      } else {
         data = await GetImageByFolders([folderId]);
       }
+
       setImages(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Error fetching images:", err);
@@ -40,49 +40,57 @@ useEffect(() => { fetchImages(selectedFolder) }, [selectedFolder]);
     }
   }
 
-  // 🔍 Filtering logic (search)
-  const filteredImages = (images ?? []).filter((img) => {
-    const matchesSearch =
-      img?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      img?.tags?.some((tag: string) =>
-        tag.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    return matchesSearch;
+  // 🔍 Search filter logic
+  const filteredImages = images.filter((img) => {
+    if (!searchQuery.trim()) return true;
+
+    const query = searchQuery.toLowerCase();
+
+    const nameMatch = img?.name?.toLowerCase().includes(query);
+    const tagMatch = img?.tags?.some((tag: string) =>
+      tag.toLowerCase().includes(query)
+    );
+
+    return nameMatch || tagMatch;
   });
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
-  {/* Sidebar stays fixed */}
-  <Sidebar
-    isCollapsed={isSidebarCollapsed}
-    onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-    selectedFolder={selectedFolder}
-    onFolderSelect={setSelectedFolder}
-  />
 
-  {/* Main content (SearchBar + ImageGrid) */}
-  <div className="flex-1 flex flex-col">
-    {/* SearchBar fixed at top */}
-    <div className="shrink-0">
-      <SearchBar
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        isSidebarCollapsed={isSidebarCollapsed}
+      {/* Sidebar (unchanged UI) */}
+      <Sidebar
+        isCollapsed={isSidebarCollapsed}
+        onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        selectedFolder={selectedFolder}
+        onFolderSelect={setSelectedFolder}
       />
-    </div>
 
-    {/* Scrollable ImageGrid container */}
-    <div className="flex-1 min-h-0 overflow-y-auto">
-      {loading ? (
-        <div className="flex flex-1 items-center justify-center text-gray-500">
-          Loading images...
+      {/* Main section (unchanged UI) */}
+      <div className="flex-1 flex flex-col">
+
+        {/* SearchBar (unchanged) */}
+        <div className="shrink-0">
+          <SearchBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            isSidebarCollapsed={isSidebarCollapsed}
+          />
         </div>
-      ) : (
-        <ImageGrid images={filteredImages} onImagesLoad={setImages} />
-      )}
+
+        {/* Scrollable grid container (unchanged) */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {loading ? (
+            <div className="flex flex-1 items-center justify-center text-gray-500">
+              Loading images...
+            </div>
+          ) : (
+            <ImageGrid
+              images={filteredImages}
+            />
+          )}
+        </div>
+      </div>
     </div>
-  </div>
-</div>
   );
 }
 

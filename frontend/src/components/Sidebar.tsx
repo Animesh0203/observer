@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, Folder, Image, Star, Tag } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { AddFolder, GetFolders, ScanFolders, SelectFolder } from "../../wailsjs/go/main/App";
+import { AddFolder, GetFolders, ScanFolders, SelectFolder, TagAllUntagged } from "../../wailsjs/go/main/App";
 import svg from "../assets/images/svg.svg";
 
 interface SidebarProps {
@@ -192,17 +192,20 @@ async function handleAddFolder() {
             </PopoverTrigger>
             <PopoverContent className='ml-4 mb-4' side="right" >
               <Button className="w-full mb-3" onClick={handleSelectFolder}>
-  Choose Folder
-</Button>
+              Choose Folder
+              </Button>
 
-<Input className='mb-3' disabled value={FolderPath} placeholder="Folder Path" />
-<Input onChange={(e) => setFolderName(e.target.value)} placeholder="Folder Name" />
+              <Input className='mb-3' disabled value={FolderPath} placeholder="Folder Path" />
+              <Input onChange={(e) => setFolderName(e.target.value)} placeholder="Folder Name" />
 
-<Button variant="outline" className="w-full mt-2" size="sm" onClick={handleAddFolder}>
-  Add Folder
-</Button>
+              <Button variant="outline" className="w-full mt-2" size="sm" onClick={handleAddFolder}>
+                Add Folder
+              </Button>
             </PopoverContent>
           </Popover>
+          <Button onClick={() => TagAllUntagged()}>
+            Tag All Untagged
+          </Button>
         </div>
       )}
     </div>

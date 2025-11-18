@@ -26,6 +26,10 @@ export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
 }
 
+export function QueueAllUntaggedForTagging() {
+  return window['go']['main']['App']['QueueAllUntaggedForTagging']();
+}
+
 export function RemoveFolder(arg1) {
   return window['go']['main']['App']['RemoveFolder'](arg1);
 }
@@ -44,6 +48,10 @@ export function SelectFolder() {
 
 export function Shutdown(arg1) {
   return window['go']['main']['App']['Shutdown'](arg1);
+}
+
+export function TagAllUntagged() {
+  return window['go']['main']['App']['TagAllUntagged']();
 }
 
 export function UnTaggedImages() {
