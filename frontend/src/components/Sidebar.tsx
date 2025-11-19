@@ -203,7 +203,7 @@ async function handleAddFolder() {
               </Button>
             </PopoverContent>
           </Popover>
-          <Button onClick={() => TagAllUntagged()}>
+          <Button className='w-full mt-3' onClick={() => TagAllUntagged()}>
             Tag All Untagged
           </Button>
         </div>

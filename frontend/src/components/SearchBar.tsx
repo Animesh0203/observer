@@ -15,12 +15,20 @@ interface SearchBarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   isSidebarCollapsed: boolean;
+  onSort: (sortBy: string) => void;
+  onResize: (size: "small" | "medium" | "large") => void;
 }
 
-const SearchBar = ({ searchQuery, onSearchChange, isSidebarCollapsed }: SearchBarProps) => {
+const SearchBar = ({
+  searchQuery,
+  onSearchChange,
+  isSidebarCollapsed,
+  onSort,
+  onResize
+}: SearchBarProps) => {
   return (
     <div className="h-16 bg-white border-b border-gray-200 flex items-center px-6 gap-4">
-      {/* Search Input */}
+
       <div className="flex-1 max-w-2xl relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
@@ -32,28 +40,24 @@ const SearchBar = ({ searchQuery, onSearchChange, isSidebarCollapsed }: SearchBa
         />
       </div>
 
-      {/* Action Buttons */}
       <div className="flex justify-end items-center gap-2">
-        {/* Filter Button */}
+
+        {/* Sort */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="icon">
               <SlidersHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
+
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>Sort By</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Name</DropdownMenuItem>
-            <DropdownMenuItem>Date Added</DropdownMenuItem>
-            <DropdownMenuItem>Date Modified</DropdownMenuItem>
-            <DropdownMenuItem>Size</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel>Filter By</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>Images</DropdownMenuItem>
-            <DropdownMenuItem>Videos</DropdownMenuItem>
-            <DropdownMenuItem>All Media</DropdownMenuItem>
+
+            <DropdownMenuItem onClick={() => onSort("name")}>Name</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onSort("dateAdded")}>Date Added</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onSort("dateModified")}>Date Modified</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onSort("size")}>Size</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -64,26 +68,25 @@ const SearchBar = ({ searchQuery, onSearchChange, isSidebarCollapsed }: SearchBa
               <LayoutGrid className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
+
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onResize("small")}>
               <Grid3x3 className="h-4 w-4 mr-2" />
               Small Grid
             </DropdownMenuItem>
-            <DropdownMenuItem>
+
+            <DropdownMenuItem onClick={() => onResize("medium")}>
               <LayoutGrid className="h-4 w-4 mr-2" />
               Medium Grid
             </DropdownMenuItem>
-            <DropdownMenuItem>
+
+            <DropdownMenuItem onClick={() => onResize("large")}>
               <LayoutGrid className="h-4 w-4 mr-2" />
               Large Grid
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* Upload Button */}
-        <Button className="bg-gray-800 hover:bg-gray-700">
-          <Settings/>
-        </Button>
       </div>
     </div>
   );

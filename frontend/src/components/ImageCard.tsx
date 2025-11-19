@@ -43,7 +43,7 @@ const ImageCard = ({ image }: ImageCardProps) => {
         {/* Overlay */}
         {isHovered && (
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2 transition-opacity">
-            <Button
+            {/* <Button
               size="icon"
               variant="secondary"
               className="bg-white/90 hover:bg-white"
@@ -56,7 +56,7 @@ const ImageCard = ({ image }: ImageCardProps) => {
               className="bg-white/90 hover:bg-white"
             >
               <Download className="h-4 w-4" />
-            </Button>
+            </Button> */}
           </div>
         )}
 

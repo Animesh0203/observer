@@ -15,6 +15,8 @@ export function GetImages():Promise<Array<main.ImageData>>;
 
 export function Greet(arg1:string):Promise<string>;
 
+export function OpenImage(arg1:string):Promise<void>;
+
 export function QueueAllUntaggedForTagging():Promise<void>;
 
 export function RemoveFolder(arg1:string):Promise<void>;

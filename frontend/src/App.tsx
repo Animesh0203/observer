@@ -7,6 +7,8 @@ import Sidebar from './components/Sidebar';
 function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [gridSize, setGridSize] = useState("medium");
+  const [sortBy, setSortBy] = useState("name");
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
   const [images, setImages] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,6 +56,27 @@ function App() {
     return nameMatch || tagMatch;
   });
 
+  const handleSort = (criteria: string) => {
+    setSortBy(criteria);
+    const sortedImages = [...filteredImages].sort((a, b) => {
+      if (criteria === 'name') {
+        return a.name.localeCompare(b.name);
+      } else if (criteria === 'dateAdded') {
+        return new Date(b.created).getTime() - new Date(a.created).getTime();
+      } else if (criteria === 'dateModified') {
+        return new Date(b.modified).getTime() - new Date(a.modified).getTime();
+      } else if (criteria === 'size') {
+        return b.size - a.size;
+      }
+      return 0;
+    });
+    setImages(sortedImages);
+  };
+
+  const handleResize = (size: "small" | "medium" | "large") => {
+    setGridSize(size);
+  }
+
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
 
@@ -74,6 +97,8 @@ function App() {
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             isSidebarCollapsed={isSidebarCollapsed}
+            onSort={handleSort}
+            onResize={handleResize}
           />
         </div>
 

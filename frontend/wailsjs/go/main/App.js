@@ -26,6 +26,10 @@ export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
 }
 
+export function OpenImage(arg1) {
+  return window['go']['main']['App']['OpenImage'](arg1);
+}
+
 export function QueueAllUntaggedForTagging() {
   return window['go']['main']['App']['QueueAllUntaggedForTagging']();
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os/exec"
 	"database/sql"
 	"errors"
 	"image"
@@ -10,16 +9,18 @@ import (
 	_ "image/png"
 	"log"
 	"net/http"
+	"observer/inference"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
+	"unsafe"
 
+	// goruntime "runtime"
 	"sync"
-	goruntime "runtime"
 
 	"github.com/disintegration/imaging"
-
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"fmt"
@@ -32,11 +33,10 @@ type App struct {
 	ctx context.Context
 	db  *sql.DB
 
-	labels  []string
+	labels []string
 
 	tagJobs chan string
 	wg      sync.WaitGroup
-	inferMu sync.Mutex
 }
 
 type ImageData struct {
@@ -64,6 +64,11 @@ type Prediction struct {
 	Label string
 	Prob  float32
 }
+
+var (
+	shell32          = syscall.NewLazyDLL("shell32.dll")
+	shellExecuteW    = shell32.NewProc("ShellExecuteW")
+)
 
 // NewApp creates a new App application struct
 func NewApp() *App {
@@ -122,7 +127,6 @@ func GenerateThumbnail(srcPath, thumbDir string, width int) (string, error) {
 	return thumbPath, nil
 }
 
-
 func loadLabels(path string) []string {
 	b, _ := os.ReadFile(path)
 	lines := strings.Split(string(b), "\n")
@@ -145,9 +149,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.db = db
 	a.initDB()
 
-	
-
-	workerCount := goruntime.NumCPU()
+	workerCount := 1
 	a.tagJobs = make(chan string, 256)
 
 	for i := 0; i < workerCount; i++ {
@@ -158,6 +160,7 @@ func (a *App) Startup(ctx context.Context) {
 	go a.startImageServer()
 }
 
+// tagWorker processes images from the tagJobs channel
 // tagWorker processes images from the tagJobs channel
 func (a *App) tagWorker(id int) {
 	defer a.wg.Done()
@@ -171,9 +174,16 @@ func (a *App) tagWorker(id int) {
 				runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d channel closed", id))
 				return
 			}
+
 			runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d processing: %s", id, imgPath))
+
+			// This is the function calling the non-thread-safe Python code
 			tags := a.CaptionImage(imgPath)
+
 			runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d finished: %s with tags %v", id, imgPath, tags))
+
+			// You can perform database updates (which are usually thread-safe) here
+			// without holding the lock, improving throughput.
 		}
 	}
 }
@@ -209,48 +219,47 @@ func (a *App) initDB() {
 }
 
 func (a *App) UnTaggedImages() ([]ImageData, error) {
-    rows, err := a.db.Query(`
+	rows, err := a.db.Query(`
         SELECT images.id, images.path, images.thumbnail_path
         FROM images
         WHERE caption IS NULL
     `)
-    if err != nil {
-        runtime.LogError(a.ctx, fmt.Sprintf("Error querying untagged images: %v", err))
-        return nil, err
-    }
-    defer rows.Close()
+	if err != nil {
+		runtime.LogError(a.ctx, fmt.Sprintf("Error querying untagged images: %v", err))
+		return nil, err
+	}
+	defer rows.Close()
 
-    var images []ImageData
+	var images []ImageData
 
-    for rows.Next() {
-        var id int
-        var path, thumbPath string
+	for rows.Next() {
+		var id int
+		var path, thumbPath string
 
-        // ✔ First scan values
-        if err := rows.Scan(&id, &path, &thumbPath); err != nil {
-            runtime.LogError(a.ctx, fmt.Sprintf("Error scanning row: %v", err))
-            continue
-        }
+		// ✔ First scan values
+		if err := rows.Scan(&id, &path, &thumbPath); err != nil {
+			runtime.LogError(a.ctx, fmt.Sprintf("Error scanning row: %v", err))
+			continue
+		}
 
-        // ✔ Now fetch metadata using correct path
-        name, size, created, modified, width, height, _ := fileMetadata(path)
+		// ✔ Now fetch metadata using correct path
+		name, size, created, modified, width, height, _ := fileMetadata(path)
 
-        images = append(images, ImageData{
-            ID:            fmt.Sprint(id),
-            Path:          path,
-            ThumbnailPath: thumbPath,
-            Name:          name,
-            Size:          size,
-            Created:       created,
-            Modified:      modified,
-            Width:         width,
-            Height:        height,
-        })
-    }
+		images = append(images, ImageData{
+			ID:            fmt.Sprint(id),
+			Path:          path,
+			ThumbnailPath: thumbPath,
+			Name:          name,
+			Size:          size,
+			Created:       created,
+			Modified:      modified,
+			Width:         width,
+			Height:        height,
+		})
+	}
 
-    return images, nil
+	return images, nil
 }
-
 
 // THE OG FUNCTION
 func (a *App) Greet(name string) string {
@@ -296,6 +305,21 @@ func (a *App) RemoveFolder(path string) error {
 	// Placeholder for future implementation
 	_, err := a.db.Exec("DELETE FROM folders WHERE path = ?", path)
 	return err
+}
+
+func (a *App) OpenImage(path string) error {
+	p, _ := syscall.UTF16PtrFromString(path)
+
+	// ShellExecuteW(0, "open", filepath, "", "", SW_SHOWNORMAL)
+	shellExecuteW.Call(
+		0,
+		uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr("open"))),
+		uintptr(unsafe.Pointer(p)),
+		0,
+		0,
+		1, // SW_SHOWNORMAL
+	)
+	return nil
 }
 
 func (a *App) ScanFolder() error {
@@ -395,24 +419,22 @@ func isImage(p string) bool {
 }
 
 func (a *App) CaptionImage(imagePath string) []string {
-    cmd := exec.Command("python", "python/tag.py", imagePath)
+	tags, err := inference.Predict(imagePath)
+	if err != nil {
+		runtime.LogError(a.ctx, "Python inference failed: "+err.Error())
+		return []string{}
+	}
 
-    out, err := cmd.Output()
-    if err != nil {
-        runtime.LogError(a.ctx, "Python inference failed: "+err.Error())
-        return []string{}
-    }
+	// Save to DB
+	_, err = a.db.Exec(
+		`UPDATE images SET caption=? WHERE path=?`,
+		strings.Join(tags, ","), imagePath,
+	)
+	if err != nil {
+		runtime.LogError(a.ctx, "DB update failed: "+err.Error())
+	}
 
-    tags := strings.Split(strings.TrimSpace(string(out)), ",")
-
-    // Save to DB
-    _, err = a.db.Exec(`UPDATE images SET caption=? WHERE path=?`,
-        strings.Join(tags, ","), imagePath)
-    if err != nil {
-        runtime.LogError(a.ctx, "DB update failed: "+err.Error())
-    }
-
-    return tags
+	return tags
 }
 
 func (a *App) QueueAllUntaggedForTagging() error {
@@ -427,7 +449,6 @@ func (a *App) QueueAllUntaggedForTagging() error {
 			case <-a.ctx.Done():
 				return
 			case a.tagJobs <- img.Path:
-				// queued
 			}
 		}
 	}()

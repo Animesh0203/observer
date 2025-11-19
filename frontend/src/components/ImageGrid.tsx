@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { ImageData } from '../types';
 import ImageCard from './ImageCard';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { OpenImage } from "../../wailsjs/go/main/App";
 
 interface ImageGridProps {
   images: ImageData[];
@@ -41,7 +42,9 @@ const ImageGrid = ({ images }: ImageGridProps) => {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
           {images.map((image) => (
-            <ImageCard key={image.id} image={image} />
+            <div key={image.id} onClick={() => OpenImage(image.path)} className="cursor-pointer">
+              <ImageCard image={image} />
+            </div>
           ))}
         </div>
       )}
