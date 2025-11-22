@@ -5,6 +5,8 @@ on:
     tags:
       - "*"
 
+  workflow_dispatch:
+
 jobs:
   build:
     runs-on: windows-latest
@@ -45,7 +47,14 @@ jobs:
           mkdir python_embed\site-packages
 
           robocopy "$pysp" python_embed\site-packages /E /NFL /NDL /NJH /NJS /NC /NS
-          if ($LASTEXITCODE -ge 8) { exit 1 }
+          $robocopyExit = $LASTEXITCODE
+          if ($robocopyExit -ge 8) { 
+            echo "Robocopy failed with exit code $robocopyExit"
+            exit 1 
+          } else {
+            echo "Robocopy completed successfully with exit code $robocopyExit"
+            exit 0
+          }
 
       # --- Copy your Python module ---
       - name: Copy Python scripts
