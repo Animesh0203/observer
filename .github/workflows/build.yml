@@ -23,10 +23,7 @@ jobs:
       # --- Download embedded Python ---
       - name: Download CPython Embedded
         run: |
-          curl -L -o python-embed.zip ^
-            https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip
-          mkdir python_embed
-          tar -xf python-embed.zip -C python_embed
+          curl -L -o python-embed.zip ^ https://www.python.org/ftp/python/3.11.9/python-3.11.9-embed-amd64.zip mkdir python_embed tar -xf python-embed.zip -C python_embed
 
       # --- System Python for pip ---
       - name: Install Python for Pip
