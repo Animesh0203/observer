@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product
+      Id="*"
+      Name="Observer"
+      Language="1033"
+      Version="1.0.7"
+      Manufacturer="Animesh Srivastava"
+      UpgradeCode="EE0C9B18-0BBD-4EED-B13C-541C1A1E15FF">
+
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+
+    <MediaTemplate />
+
+    <Feature Id="Complete" Level="1">
+      <ComponentGroupRef Id="AppComponents" />
+    </Feature>
+
+    <!-- Start Menu Shortcut -->
+    <DirectoryRef Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut" Guid="2D7A3F51-82D6-4EB4-9BA1-3A3106F2F802">
+        <Shortcut
+            Id="ApplicationStartMenuShortcut"
+            Name="Observer"
+            Target="[INSTALLFOLDER]observer.exe"
+            WorkingDirectory="INSTALLFOLDER" />
+        <RemoveFolder Id="RemoveProgramMenuDir" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\Observer" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
+      </Component>
+    </DirectoryRef>
+
+  </Product>
+
+  <!-- File layout -->
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFilesFolder">
+        <Directory Id="INSTALLFOLDER" Name="Observer">
+          <Directory Id="PythonFolder" Name="Python" />
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder" />
+    </Directory>
+  </Fragment>
+
+  <!-- Files to install -->
+  <Fragment>
+    <ComponentGroup Id="AppComponents">
+
+      <!-- Main Executable -->
+      <Component Id="ObserverExe" Guid="A3C0DB56-7199-4D86-AB27-B057C3C1FED3">
+        <File Id="ObserverEXE" Source="dist\observer.exe" KeyPath="yes" />
+      </Component>
+
+      <!-- Python runtime -->
+      <Component Id="PythonFiles" Guid="778BB791-0B8D-4C29-8E5C-B1E24F7962F5">
+        <File Id="PythonDLL" Source="dist\Python\python311.dll"/>
+        <File Id="PythonZip" Source="dist\Python\python311.zip"/>
+      </Component>
+
+      <!-- Python folder recursive copy -->
+      <Component Id="PythonSitePackages" Guid="C8CB0CCF-5103-4DB4-8F8C-ECCEF18C6F3D" Directory="PythonFolder">
+        <Directory Id="PythonDir" Name="Python">
+          <Directory Id="PythonSite" Name="site-packages" />
+        </Directory>
+        <Component Id="CopyPythonDir" Guid="F1ABBE58-1C69-4D3B-A769-FA342B7CDC55">
+          <File Id="SitePkg" Source="dist\Python\site-packages\**" />
+        </Component>
+      </Component>
+
+    </ComponentGroup>
+  </Fragment>
+</Wix>
