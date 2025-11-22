@@ -87,7 +87,7 @@ jobs:
 
       # --- Install WiX Toolset ---
       - name: Install WiX Toolset
-        run: choco install wixtoolset --version=3.11.2 -y
+        run: choco install wixtoolset
 
       # --- Build MSI ---
       - name: Build MSI Installer
