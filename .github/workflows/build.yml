@@ -22,7 +22,7 @@ jobs:
         with:
           go-version: "1.22"
 
-      # --- Setup Python for Building ---
+      # --- Download Python for Development ---
       - name: Setup Python Development Environment
         run: |
           # Download full Python installer (includes headers and libs)
@@ -34,15 +34,10 @@ jobs:
           mkdir python_runtime
           tar -xf python-embed.zip -C python_runtime
 
-      # --- System Python for pip ---
-      - name: Install Python for Pip
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
+      # --- System Python for pip (can remove this step now) ---
       - name: Install Python Dependencies
         run: |
-          # Use the full Python installation to install packages
+          # Use the full Python installation
           .\python_build\python.exe -m pip install --upgrade pip
           .\python_build\python.exe -m pip install numpy pillow onnxruntime onnxruntime-directml
           
@@ -73,7 +68,14 @@ jobs:
 
       # --- Build app ---
       - name: Build Wails App
-        run: wails build -platform windows/amd64 -o observer.exe
+        run: |
+          # Add Python to PATH so DLLs can be found during CGo compilation
+          $env:PATH = "$PWD\python_build;$PWD\python_build\DLLs;$env:PATH"
+          $env:CGO_ENABLED = "1"
+          $env:CGO_CFLAGS = "-I$PWD\python_build\include"
+          $env:CGO_LDFLAGS = "-L$PWD\python_build\libs -lpython311"
+          
+          wails build -platform windows/amd64 -o observer.exe
 
       # --- Prepare dist folder ---
       - name: Prepare Dist Folder
@@ -81,7 +83,7 @@ jobs:
           mkdir dist
           xcopy /E /I /Y build\bin dist\
           mkdir dist\Python
-          xcopy /E /I /Y python_embed\* dist\Python\
+          xcopy /E /I /Y python_runtime\* dist\Python\
 
       # --- Install WiX Toolset ---
       - name: Install WiX Toolset
