@@ -1,73 +1,114 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product
-      Id="*"
-      Name="Observer"
-      Language="1033"
-      Version="1.0.7"
-      Manufacturer="Animesh Srivastava"
-      UpgradeCode="EE0C9B18-0BBD-4EED-B13C-541C1A1E15FF">
+  <Product Id="*" 
+           Name="Observer" 
+           Language="1033" 
+           Version="1.0.1" 
+           Manufacturer="Animesh Srivastava" 
+           UpgradeCode="B7AA3B0C-DA96-40EA-B909-DDA0477A2E8E">
+    
+    <Package InstallerVersion="200" 
+             Compressed="yes" 
+             InstallScope="perMachine" 
+             Description="Observer Application Installer"
+             Comments="Observer with embedded Python" />
 
-    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" />
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    <MediaTemplate EmbedCab="yes" />
 
-    <MediaTemplate />
+    <!-- UI -->
+    <UIRef Id="WixUI_InstallDir" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
 
-    <Feature Id="Complete" Level="1">
-      <ComponentGroupRef Id="AppComponents" />
+    <!-- Feature -->
+    <Feature Id="ProductFeature" Title="Observer" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentGroupRef Id="PythonComponents" />
     </Feature>
 
-    <!-- Start Menu Shortcut -->
-    <DirectoryRef Id="ProgramMenuFolder">
-      <Component Id="StartMenuShortcut" Guid="2D7A3F51-82D6-4EB4-9BA1-3A3106F2F802">
-        <Shortcut
-            Id="ApplicationStartMenuShortcut"
-            Name="Observer"
-            Target="[INSTALLFOLDER]observer.exe"
-            WorkingDirectory="INSTALLFOLDER" />
-        <RemoveFolder Id="RemoveProgramMenuDir" On="uninstall" />
-        <RegistryValue Root="HKCU" Key="Software\Observer" Name="installed" Type="integer" Value="1" KeyPath="yes"/>
-      </Component>
-    </DirectoryRef>
-
-  </Product>
-
-  <!-- File layout -->
-  <Fragment>
+    <!-- Directory Structure -->
     <Directory Id="TARGETDIR" Name="SourceDir">
       <Directory Id="ProgramFilesFolder">
         <Directory Id="INSTALLFOLDER" Name="Observer">
-          <Directory Id="PythonFolder" Name="Python" />
+          <!-- Python directory will be here -->
+          <Directory Id="PYTHONDIR" Name="Python" />
         </Directory>
       </Directory>
-      <Directory Id="ProgramMenuFolder" />
+      
+      <!-- Start Menu -->
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="Observer"/>
+      </Directory>
     </Directory>
-  </Fragment>
 
-  <!-- Files to install -->
-  <Fragment>
-    <ComponentGroup Id="AppComponents">
-
-      <!-- Main Executable -->
-      <Component Id="ObserverExe" Guid="A3C0DB56-7199-4D86-AB27-B057C3C1FED3">
-        <File Id="ObserverEXE" Source="dist\observer.exe" KeyPath="yes" />
+    <!-- Main Application Components -->
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="ObserverExe" Guid="A8C6482D-78CE-48A3-B67E-FA9D72F6E9F5">
+        <File Id="ObserverExeFile" 
+              Source="dist\observer.exe" 
+              KeyPath="yes" 
+              Checksum="yes" />
+        
+        <!-- Start Menu Shortcut -->
+        <Shortcut Id="ApplicationStartMenuShortcut" 
+                  Directory="ApplicationProgramsFolder"
+                  Name="Observer"
+                  Description="Launch Observer Application"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="ObserverIcon.exe"
+                  IconIndex="0"
+                  Advertise="yes" />
+        
+        <!-- Desktop Shortcut (optional) -->
+        <Shortcut Id="ApplicationDesktopShortcut"
+                  Directory="DesktopFolder"
+                  Name="Observer"
+                  Description="Launch Observer Application"
+                  WorkingDirectory="INSTALLFOLDER"
+                  Icon="ObserverIcon.exe"
+                  IconIndex="0"
+                  Advertise="yes" />
       </Component>
 
-      <!-- Python runtime -->
-      <Component Id="PythonFiles" Guid="778BB791-0B8D-4C29-8E5C-B1E24F7962F5">
-        <File Id="PythonDLL" Source="dist\Python\python311.dll"/>
-        <File Id="PythonZip" Source="dist\Python\python311.zip"/>
+      <!-- Remove Start Menu folder on uninstall -->
+      <Component Id="ApplicationShortcutComponent" Guid="417EFBB8-1EF3-45F7-A46D-6434A5830F34">
+        <RegistryValue Root="HKCU" 
+                       Key="Software\Animesh Srivastava\Observer" 
+                       Name="installed" 
+                       Type="integer" 
+                       Value="1" 
+                       KeyPath="yes"/>
+        <RemoveFolder Id="ApplicationProgramsFolder" 
+                      Directory="ApplicationProgramsFolder" 
+                      On="uninstall"/>
       </Component>
-
-      <!-- Python folder recursive copy -->
-      <Component Id="PythonSitePackages" Guid="C8CB0CCF-5103-4DB4-8F8C-ECCEF18C6F3D" Directory="PythonFolder">
-        <Directory Id="PythonDir" Name="Python">
-          <Directory Id="PythonSite" Name="site-packages" />
-        </Directory>
-        <Component Id="CopyPythonDir" Guid="F1ABBE58-1C69-4D3B-A769-FA342B7CDC55">
-          <File Id="SitePkg" Source="dist\Python\site-packages\**" />
-        </Component>
-      </Component>
-
     </ComponentGroup>
-  </Fragment>
+
+    <!-- Python Runtime Components -->
+    <ComponentGroup Id="PythonComponents" Directory="PYTHONDIR">
+      <!-- Python DLLs and core files -->
+      <Component Id="Python311DLL" Guid="38C18869-9A19-46C4-87ED-8A4479239EAB">
+        <File Id="Python311DLLFile" Source="dist\Python\python311.dll" KeyPath="yes" />
+      </Component>
+      
+      <Component Id="Python311Zip" Guid="F9C534FC-0A73-40CE-AAEC-6B61F80E7C7C">
+        <File Id="Python311ZipFile" Source="dist\Python\python311.zip" KeyPath="yes" />
+      </Component>
+
+      <!-- Add more Python files as needed -->
+      <Component Id="PythonOtherFiles" Guid="3377591E-7836-4276-B60B-01F5D01D6CD8">
+        <File Id="Python311pth" Source="dist\Python\python311._pth" KeyPath="yes" />
+        <!-- Add other Python files here -->
+      </Component>
+    </ComponentGroup>
+
+    <!-- Desktop folder reference -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="DesktopFolder" Name="Desktop"/>
+    </Directory>
+
+    <!-- Icon definition -->
+    <Icon Id="ObserverIcon.exe" SourceFile="dist\observer.exe" />
+
+  </Product>
 </Wix>

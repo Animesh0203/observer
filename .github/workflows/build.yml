@@ -93,8 +93,12 @@ jobs:
       - name: Build MSI Installer
         run: |
           $env:PATH += ";C:\Program Files (x86)\WiX Toolset v3.11\bin"
-          candle installer\Product.wxs -o installer\Product.wixobj
-          light installer\Product.wixobj -ext WixUIExtension -o observer-setup.msi
+          
+          heat dir dist\Python -cg PythonComponents -dr PYTHONDIR -gg -sfrag -srd -var var.PythonSource -out installer\PythonFiles.wxs
+
+          candle installer\Product.wxs installer\PythonFiles.wxs -dPythonSource=dist\Python -o installer\
+   
+          light installer\Product.wixobj installer\PythonFiles.wixobj -ext WixUIExtension -o observer-setup.msi
 
       # --- Upload MSI artifact ---
       - name: Upload MSI
