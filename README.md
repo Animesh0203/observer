@@ -239,7 +239,7 @@ No installation needed.
 ### **Clone the repo**
 
 ```sh
-git clone https://github.com/YOURNAME/observer
+git clone https://github.com/Animesh0203/observer
 cd observer
 ```
 
@@ -369,11 +369,10 @@ C.pyFinalize()
 
 # 🌐 Screenshots
 
-```
+
 ![main-ui](docs/main_ui.png)
 ![activity-bar](docs/activity_bar.png)
 ![folder-view](docs/folder_view.png)
-```
 
 ---
 
