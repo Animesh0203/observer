@@ -1,14 +1,31 @@
-import onnxruntime as ort
+import os, sys, json, onnxruntime as ort
 from PIL import Image
 import numpy as np
-import json
-import os
 
-# ----------------------------------------
-# MODEL + LABEL LOADING (only once)
-# ----------------------------------------
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "Python/Python/efficientnet-lite4-11.onnx")
-LABELS_PATH = os.path.join(os.path.dirname(__file__), "Python/Python/labels_map.txt")
+BASE = os.path.dirname(__file__)
+
+# Try model in same folder (BUILD mode)
+MODEL_PATH = os.path.join(BASE, "efficientnet-lite4-11.onnx")
+LABELS_PATH = os.path.join(BASE, "labels_map.txt")
+
+# If missing, try parent folder (DEV mode)
+if not os.path.exists(MODEL_PATH):
+    ALT_BASE = os.path.dirname(BASE)
+    ALT_MODEL_PATH = os.path.join(ALT_BASE, "efficientnet-lite4-11.onnx")
+    ALT_LABELS_PATH = os.path.join(ALT_BASE, "labels_map.txt")
+
+    if os.path.exists(ALT_MODEL_PATH):
+        MODEL_PATH = ALT_MODEL_PATH
+        LABELS_PATH = ALT_LABELS_PATH
+        print("📂 DEV MODE: Using parent directory for model")
+    else:
+        print("❌ MODEL NOT FOUND in both locations!")
+        print("Tried:", MODEL_PATH)
+        print("And:", ALT_MODEL_PATH)
+
+print("🔍 Using model at:", MODEL_PATH)
+print("🔍 Using labels at:", LABELS_PATH)
+
 
 # load labels once
 labels_json = json.load(open(LABELS_PATH))

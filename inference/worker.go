@@ -139,6 +139,7 @@ func ensurePythonWorker() {
 
 // Internal call — runs ONLY on the Python worker thread
 func predictInternal(imagePath string) ([]string, error) {
+	
 	modName := C.CString("tag")
 	defer C.free(unsafe.Pointer(modName))
 	

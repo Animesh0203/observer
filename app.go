@@ -467,6 +467,7 @@ func (a *App) CaptionImage(imagePath string, activityID string) []string {
 
 	tags, err := inference.Predict(imagePath)
 	if err != nil {
+		time.Sleep(5)
 		runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
 			ID:     activityID,
 			Status: "error",
