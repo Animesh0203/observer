@@ -39,6 +39,14 @@ type App struct {
 	wg      sync.WaitGroup
 }
 
+type ActivityEvent struct {
+	ID      string `json:"id"`
+	Status  string `json:"status"`
+	Label   string `json:"label"`
+	Detail  string `json:"detail"`
+	Percent int    `json:"percent"`
+}
+
 type ImageData struct {
 	ID            string    `json:"id"`
 	Name          string    `json:"name"`
@@ -66,8 +74,8 @@ type Prediction struct {
 }
 
 var (
-	shell32          = syscall.NewLazyDLL("shell32.dll")
-	shellExecuteW    = shell32.NewProc("ShellExecuteW")
+	shell32       = syscall.NewLazyDLL("shell32.dll")
+	shellExecuteW = shell32.NewProc("ShellExecuteW")
 )
 
 // NewApp creates a new App application struct
@@ -127,16 +135,20 @@ func GenerateThumbnail(srcPath, thumbDir string, width int) (string, error) {
 	return thumbPath, nil
 }
 
-func loadLabels(path string) []string {
-	b, _ := os.ReadFile(path)
-	lines := strings.Split(string(b), "\n")
-	return lines
-}
-
 // startup is called when the app starts. The context is saved
 // so we can call the runtime methods
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+	go func() {
+		time.Sleep(3 * time.Second)
+		runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+			ID:      "startup-test",
+			Status:  "start",
+			Label:   "Startup Event",
+			Detail:  "Program is starting up",
+			Percent: 0,
+		})
+	}()
 
 	// DB
 	if _, err := os.Stat("./"); os.IsNotExist(err) {
@@ -158,32 +170,50 @@ func (a *App) Startup(ctx context.Context) {
 	}
 
 	go a.startImageServer()
+	go func() {
+		time.Sleep(3 * time.Second)
+		runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+			ID:      "startup-test",
+			Status:  "finish",
+			Label:   "Startup Event",
+			Detail:  "Program has started successfully",
+			Percent: 0,
+		})
+	}()
 }
 
 // tagWorker processes images from the tagJobs channel
-// tagWorker processes images from the tagJobs channel
-func (a *App) tagWorker(id int) {
+func (a *App) tagWorker(workerID int) {
 	defer a.wg.Done()
 	for {
 		select {
 		case <-a.ctx.Done():
-			runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d shutting down", id))
+			runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d shutting down", workerID))
 			return
+
 		case imgPath, ok := <-a.tagJobs:
 			if !ok {
-				runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d channel closed", id))
+				runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d channel closed", workerID))
 				return
 			}
 
-			runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d processing: %s", id, imgPath))
+			runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d processing: %s", workerID, imgPath))
 
-			// This is the function calling the non-thread-safe Python code
-			tags := a.CaptionImage(imgPath)
+			activityID := fmt.Sprintf("caption-%s", filepath.Base(imgPath))
 
-			runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d finished: %s with tags %v", id, imgPath, tags))
+			// Start activity
+			runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+				ID:      activityID,
+				Status:  "start",
+				Label:   "Captioning image",
+				Detail:  filepath.Base(imgPath),
+				Percent: 0,
+			})
 
-			// You can perform database updates (which are usually thread-safe) here
-			// without holding the lock, improving throughput.
+			tags := a.CaptionImage(imgPath, activityID)
+
+			// Finish or error is now handled inside CaptionImage (we’ll fix that next)
+			runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d finished: %s with tags %v", workerID, imgPath, tags))
 		}
 	}
 }
@@ -193,6 +223,7 @@ func (a *App) initDB() {
 
 	a.db.Exec("PRAGMA journal_mode=WAL;")
 	a.db.Exec("PRAGMA synchronous=NORMAL;")
+	a.db.Exec("PRAGMA busy_timeout = 2000;")
 
 	_, _ = a.db.Exec(`
         CREATE TABLE IF NOT EXISTS folders (
@@ -215,6 +246,10 @@ func (a *App) initDB() {
 			image_id INTEGER,
 			FOREIGN KEY (image_id) REFERENCES images(id)
 		);
+
+		CREATE INDEX IF NOT EXISTS idx_images_caption ON images(caption);
+		CREATE INDEX IF NOT EXISTS idx_images_folder_id ON images(folder_id);
+
     `)
 }
 
@@ -294,7 +329,7 @@ func (a *App) SelectFolder() (string, error) {
 	}
 
 	if folderPath == "" {
-		return "", fmt.Errorf("no folder selected")
+		return "", nil // caller checks for empty string
 	}
 
 	runtime.LogInfo(a.ctx, fmt.Sprintf("Selected folder: %s", folderPath))
@@ -359,7 +394,9 @@ func (a *App) startImageServer() {
 	})
 
 	// Start HTTP server on localhost, random free port (or fixed, like 127.0.0.1:5178)
-	http.ListenAndServe("127.0.0.1:5178", mux)
+	if err := http.ListenAndServe("127.0.0.1:5178", mux); err != nil {
+		runtime.LogError(a.ctx, "Image server failed: "+err.Error())
+	}
 }
 
 func (a *App) walkFolderAndInsertImages(folderPath string, folderID int, stmt *sql.Stmt) error {
@@ -418,47 +455,131 @@ func isImage(p string) bool {
 	return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp"
 }
 
-func (a *App) CaptionImage(imagePath string) []string {
+func (a *App) CaptionImage(imagePath string, activityID string) []string {
+	// Predict
+	runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+		ID:      activityID,
+		Status:  "progress",
+		Label:   "Captioning image",
+		Detail:  "Running model…",
+		Percent: 20,
+	})
+
 	tags, err := inference.Predict(imagePath)
 	if err != nil {
-		runtime.LogError(a.ctx, "Python inference failed: "+err.Error())
+		runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+			ID:     activityID,
+			Status: "error",
+			Label:  "Captioning failed",
+			Detail: err.Error(),
+		})
 		return []string{}
 	}
 
 	// Save to DB
-	_, err = a.db.Exec(
-		`UPDATE images SET caption=? WHERE path=?`,
-		strings.Join(tags, ","), imagePath,
-	)
-	if err != nil {
-		runtime.LogError(a.ctx, "DB update failed: "+err.Error())
+	runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+		ID:      activityID,
+		Status:  "progress",
+		Label:   "Captioning image",
+		Detail:  "Saving caption…",
+		Percent: 70,
+	})
+
+	caption := strings.Join(tags, ",")
+	if _, err := a.db.Exec(`UPDATE images SET caption=? WHERE path=?`, caption, imagePath); err != nil {
+		runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+			ID:     activityID,
+			Status: "error",
+			Label:  "Failed to save caption",
+			Detail: err.Error(),
+		})
+		return tags
 	}
+
+	// Finish
+	runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+		ID:      activityID,
+		Status:  "finish",
+		Label:   "Captioned image",
+		Detail:  filepath.Base(imagePath),
+		Percent: 100,
+	})
 
 	return tags
 }
 
 func (a *App) QueueAllUntaggedForTagging() error {
+	runtime.LogInfo(a.ctx, "Queueing all untagged images for tagging")
 	images, err := a.UnTaggedImages()
 	if err != nil {
+		// Emit activity error
+		runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+			ID:     "tag-all-untagged",
+			Status: "error",
+			Label:  "Failed to fetch untagged images",
+			Detail: err.Error(),
+		})
 		return err
 	}
 
+	total := len(images)
+	if total == 0 {
+		runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+			ID:      "tag-all-untagged",
+			Status:  "finish",
+			Label:   "No untagged images found",
+			Detail:  "",
+			Percent: 100,
+		})
+		return nil
+	}
+
+	// Emit start event
+	runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+		ID:      "tag-all-untagged",
+		Status:  "start",
+		Label:   "Tagging all untagged images",
+		Detail:  fmt.Sprintf("Found %d images", total),
+		Percent: 0,
+	})
+
 	go func() {
-		for _, img := range images {
+		for i, img := range images {
 			select {
 			case <-a.ctx.Done():
+				runtime.LogInfo(a.ctx, "QueueAllUntaggedForTagging cancelled via context")
 				return
 			case a.tagJobs <- img.Path:
+				percent := int(float64(i+1) / float64(total) * 100)
+				runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+					ID:      "tag-all-untagged",
+					Status:  "progress",
+					Label:   "Tagging all untagged images",
+					Detail:  fmt.Sprintf("Queued %d/%d", i+1, total),
+					Percent: percent,
+				})
 			}
 		}
+
+		runtime.LogInfo(a.ctx, "Finished queueing all untagged images")
+		runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+			ID:      "tag-all-untagged",
+			Status:  "finish",
+			Label:   "Finished queuing untagged images",
+			Detail:  "Workers are processing them",
+			Percent: 100,
+		})
 	}()
 
 	return nil
 }
 
 func (a *App) TagAllUntagged() {
+
+	// Queue work
 	if err := a.QueueAllUntaggedForTagging(); err != nil {
 		runtime.LogError(a.ctx, "Failed to queue untagged images: "+err.Error())
+		return
 	}
 }
 
@@ -488,9 +609,10 @@ func (a *App) GetImages() ([]ImageData, error) {
 
 		var thumbPath string
 		if _, err := os.Stat(path); err == nil {
-			thumbPath, _ = GenerateThumbnail(path, thumbDir, 200)
-			//Insert thumbnail path into DB
-			_, _ = a.db.Exec("UPDATE images SET thumbnail_path = ? WHERE id = ?", thumbPath, id)
+			if thumbPath == "" {
+				thumbPath, _ = GenerateThumbnail(path, thumbDir, 200)
+				_, _ = a.db.Exec("UPDATE images SET thumbnail_path = ? WHERE id = ?", thumbPath, id)
+			}
 		}
 
 		out = append(out, ImageData{
@@ -605,7 +727,43 @@ func (a *App) GetFolders() ([]FolderData, error) {
 }
 
 func (a *App) Shutdown(ctx context.Context) {
+	if a.tagJobs != nil {
+		close(a.tagJobs)
+	}
+	a.wg.Wait()
+
 	if a.db != nil {
 		a.db.Close()
 	}
+}
+
+func (a *App) TestActivity() {
+	runtime.LogInfo(a.ctx, "TestActivity fired!")
+	runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+		ID:      "test-activity",
+		Status:  "start",
+		Label:   "Manual test event",
+		Detail:  "If you see this in React, everything works!",
+		Percent: 0,
+	})
+
+	// simulate progress
+	time.Sleep(300 * time.Millisecond)
+	runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+		ID:      "test-activity",
+		Status:  "progress",
+		Label:   "Manual test event",
+		Detail:  "Halfway...",
+		Percent: 50,
+	})
+
+	// simulate finish
+	time.Sleep(300 * time.Millisecond)
+	runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+		ID:      "test-activity",
+		Status:  "finish",
+		Label:   "Test event finished",
+		Detail:  "Completed",
+		Percent: 100,
+	})
 }

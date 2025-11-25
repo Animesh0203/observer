@@ -6,8 +6,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, Folder, Image, Star, Tag } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { AddFolder, GetFolders, ScanFolders, SelectFolder, TagAllUntagged } from "../../wailsjs/go/main/App";
+import { AddFolder, GetFolders, ScanFolders, SelectFolder, TagAllUntagged, TestActivity } from "../../wailsjs/go/main/App";
 import svg from "../assets/images/svg.svg";
+import { useStatusBar } from '../hooks/useStatus';
 
 interface SidebarProps {
   isCollapsed: boolean;
@@ -19,6 +20,7 @@ interface SidebarProps {
 const Sidebar = ({ isCollapsed, onToggle, selectedFolder, onFolderSelect }: SidebarProps) => {
 
   const [foldersData, setFoldersData] = useState<any[]>([]);
+  const { start, update, finish } = useStatusBar();
 
   const menuItems = [
     { id: 'all', label: 'All Images', icon: Image, count: 0 },
@@ -63,10 +65,30 @@ const folders = foldersData.map((folder) => ({
 
 async function handleAddFolder() {
   try {
+    console.log("Adding folder:", FolderName, FolderPath);
+
+    // 1️⃣ Add folder task
+    const addId = `add-folder-${Date.now()}`;
+    start({ id: addId, label: `Adding folder "${FolderName}"` });
+
     await AddFolder(FolderName, FolderPath);
+    finish(addId, true);
+
+    // 2️⃣ Scan folder task
+    const scanId = `scan-folder-${Date.now()}`;
+    start({ id: scanId, label: `Scanning folder "${FolderName}"` });
+
     await ScanFolders(FolderPath);
+    finish(scanId, true);
+
+    // 3️⃣ Refresh folders list
+    const refreshId = `refresh-folders-${Date.now()}`;
+    start({ id: refreshId, label: "Refreshing folders list" });
+
     const folders = await GetFolders();
     setFoldersData(folders);
+    finish(refreshId, true);
+
   } catch (err) {
     console.error("Error adding folder:", err);
   }

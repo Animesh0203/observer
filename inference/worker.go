@@ -4,8 +4,8 @@
 package inference
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/../python_build/include
-#cgo LDFLAGS: -L${SRCDIR}/../python_build/libs -lpython311
+#cgo CFLAGS: -IC:/Python311/include -IC:/Python311/include/cpython
+#cgo LDFLAGS: -LC:/Python311/libs -lpython311
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <stdlib.h>

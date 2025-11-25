@@ -6,8 +6,8 @@ export function AddFolder(arg1, arg2) {
   return window['go']['main']['App']['AddFolder'](arg1, arg2);
 }
 
-export function CaptionImage(arg1) {
-  return window['go']['main']['App']['CaptionImage'](arg1);
+export function CaptionImage(arg1, arg2) {
+  return window['go']['main']['App']['CaptionImage'](arg1, arg2);
 }
 
 export function GetFolders() {
@@ -56,6 +56,10 @@ export function Shutdown(arg1) {
 
 export function TagAllUntagged() {
   return window['go']['main']['App']['TagAllUntagged']();
+}
+
+export function TestActivity() {
+  return window['go']['main']['App']['TestActivity']();
 }
 
 export function UnTaggedImages() {
