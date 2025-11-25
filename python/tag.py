@@ -7,8 +7,8 @@ import os
 # ----------------------------------------
 # MODEL + LABEL LOADING (only once)
 # ----------------------------------------
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "efficientnet-lite4-11.onnx")
-LABELS_PATH = os.path.join(os.path.dirname(__file__), "labels_map.txt")
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "Python/Python/efficientnet-lite4-11.onnx")
+LABELS_PATH = os.path.join(os.path.dirname(__file__), "Python/Python/labels_map.txt")
 
 # load labels once
 labels_json = json.load(open(LABELS_PATH))
