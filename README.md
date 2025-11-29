@@ -367,15 +367,6 @@ C.pyFinalize()
 
 ---
 
-# 🌐 Screenshots
-
-
-![main-ui](docs/main_ui.png)
-![activity-bar](docs/activity_bar.png)
-![folder-view](docs/folder_view.png)
-
----
-
 # 🧾 License
 
 Choose one:

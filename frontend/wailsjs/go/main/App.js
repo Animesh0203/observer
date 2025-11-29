@@ -65,3 +65,7 @@ export function TestActivity() {
 export function UnTaggedImages() {
   return window['go']['main']['App']['UnTaggedImages']();
 }
+
+export function DelModel() {
+  return window['go']['main']['App']['DelModel']();
+}

@@ -34,3 +34,5 @@ export function TagAllUntagged():Promise<void>;
 export function TestActivity():Promise<void>;
 
 export function UnTaggedImages():Promise<Array<main.ImageData>>;
+
+export function DelModel():Promise<void>;

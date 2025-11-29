@@ -98,6 +98,7 @@ var (
 
 type job struct {
 	imagePath string
+	unload    bool
 	reply     chan jobReply
 }
 
@@ -130,19 +131,26 @@ func ensurePythonWorker() {
 			C.free(unsafe.Pointer(pathCmd))
 
 			for j := range jobChan {
+				if j.unload {
+					success, err := unloadInternal() // calls unload_model in Python
+					j.reply <- jobReply{tags: nil, err: err}
+					continue
+				}
+
 				t, err := predictInternal(j.imagePath)
 				j.reply <- jobReply{tags: t, err: err}
 			}
 		}()
 	})
+
 }
 
 // Internal call — runs ONLY on the Python worker thread
 func predictInternal(imagePath string) ([]string, error) {
-	
+
 	modName := C.CString("tag")
 	defer C.free(unsafe.Pointer(modName))
-	
+
 	module := C.pyImportModule(modName)
 	if module == nil {
 		C.pyErrPrint()
@@ -152,7 +160,7 @@ func predictInternal(imagePath string) ([]string, error) {
 
 	funcName := C.CString("predict")
 	defer C.free(unsafe.Pointer(funcName))
-	
+
 	pyFunc := C.pyGetAttr(module, funcName)
 	if pyFunc == nil || C.pyCallableCheck(pyFunc) == 0 {
 		if pyFunc != nil {
@@ -165,7 +173,7 @@ func predictInternal(imagePath string) ([]string, error) {
 
 	cPath := C.CString(imagePath)
 	defer C.free(unsafe.Pointer(cPath))
-	
+
 	fmtStr := C.CString("(s)")
 	defer C.free(unsafe.Pointer(fmtStr))
 
@@ -200,7 +208,7 @@ func predictInternal(imagePath string) ([]string, error) {
 		if C.pyUnicodeCheck(item) == 0 {
 			return nil, fmt.Errorf("item at index %d not unicode", i)
 		}
-		
+
 		// PyUnicode_AsUTF8 returns internal buffer, valid until item is freed
 		cStr := C.pyUnicodeAsUTF8(item)
 		if cStr == nil {
@@ -221,4 +229,40 @@ func Predict(imagePath string) ([]string, error) {
 	jobChan <- job{imagePath: imagePath, reply: reply}
 	resp := <-reply
 	return resp.tags, resp.err
+}
+
+func unloadInternal() error {
+    modName := C.CString("tag")
+    defer C.free(unsafe.Pointer(modName))
+
+    module := C.pyImportModule(modName)
+    if module == nil {
+        return fmt.Errorf("cannot import tag.py")
+    }
+    defer C.pyDecRef(module)
+
+    funcName := C.CString("unload_model")
+    defer C.free(unsafe.Pointer(funcName))
+
+    pyFunc := C.pyGetAttr(module, funcName)
+    if pyFunc == nil {
+        return fmt.Errorf("no unload_model() found")
+    }
+    defer C.pyDecRef(pyFunc)
+
+    args := C.Py_BuildValue(nil)
+    res := C.pyCallObject(pyFunc, args)
+    if res == nil {
+        return fmt.Errorf("Python unload_model() failed")
+    }
+    C.pyDecRef(res)
+    return nil
+}
+
+func UnloadModel() error {
+    ensurePythonWorker()
+    reply := make(chan jobReply)
+    jobChan <- job{unload: true, reply: reply}
+    resp := <-reply
+    return resp.err
 }

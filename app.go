@@ -768,3 +768,34 @@ func (a *App) TestActivity() {
 		Percent: 100,
 	})
 }
+
+func (a *App) DelModel() error {
+	runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+		ID:      "unload-model",
+		Status:  "start",
+		Label:   "Unloading model",
+		Detail:  "Releasing resources…",
+		Percent: 0,
+	})
+
+	time.Sleep(5)
+	err := inference.UnloadModel()
+	if err != nil {
+		runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+			ID:     "unload-model",
+			Status: "error",
+			Label:  "Failed to unload model",
+			Detail: err.Error(),
+		})
+		return err
+	}
+
+	runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+		ID:      "unload-model",
+		Status:  "finish",
+		Label:   "Model unloaded",
+		Detail:  "Resources released successfully",
+		Percent: 100,
+	})
+	return nil
+}

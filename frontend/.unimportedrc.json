@@ -1,0 +1,29 @@
+{
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/*.tests.{js,jsx,ts,tsx}",
+    "**/*.test.{js,jsx,ts,tsx}",
+    "**/*.spec.{js,jsx,ts,tsx}",
+    "**/tests/**",
+    "**/__tests__/**",
+    "**/*.d.ts"
+  ],
+  "ignoreUnimported": [],
+  "ignoreUnused": [
+    "@radix-ui/react-aspect-ratio",
+    "@radix-ui/react-avatar",
+    "@radix-ui/react-collapsible",
+    "@radix-ui/react-dialog",
+    "@radix-ui/react-label",
+    "@radix-ui/react-separator",
+    "@radix-ui/react-tooltip",
+    "@tailwindcss/vite",
+    "@types/node",
+    "next-themes",
+    "sonner",
+    "tailwindcss",
+    "tw-animate-css"
+  ],
+  "ignoreUnresolved": [],
+  "respectGitignore": true
+}

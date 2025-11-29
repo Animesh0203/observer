@@ -88,8 +88,45 @@ def preprocess(path):
 # ----------------------------------------
 
 def predict(image_path: str):
+    load_model()
     inp = preprocess(image_path)
     output = SESSION.run([output_name], {input_name: inp})[0].flatten()
 
     top5 = output.argsort()[-5:][::-1]
     return [labels[i] for i in top5]
+
+
+SESSION = None
+_model_loaded = False
+
+def load_model():
+    global SESSION, input_name, output_name, _model_loaded
+
+    if _model_loaded:
+        return  # already loaded
+
+    providers = available_provider()
+    SESSION = ort.InferenceSession(MODEL_PATH, providers=providers)
+
+    input_name = SESSION.get_inputs()[0].name
+    output_name = SESSION.get_outputs()[0].name
+
+    _model_loaded = True
+    print("🔵 Model loaded")
+
+
+def unload_model():
+    global SESSION, _model_loaded
+
+    if SESSION is not None:
+        print("🟡 Unloading model...")
+        SESSION = None  # remove reference
+        _model_loaded = False
+
+        import gc
+        gc.collect()
+        print("🟢 Model unloaded")
+
+        return True
+
+    return False
