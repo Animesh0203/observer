@@ -16,7 +16,8 @@ interface SearchBarProps {
   onSearchChange: (query: string) => void;
   isSidebarCollapsed: boolean;
   onSort: (sortBy: string) => void;
-  onResize: (size: "small" | "medium" | "large") => void;
+  // onResize: (size: "small" | "medium" | "large") => void;
+  onRefresh?: () => void;
 }
 
 const SearchBar = ({
@@ -24,7 +25,8 @@ const SearchBar = ({
   onSearchChange,
   isSidebarCollapsed,
   onSort,
-  onResize
+  // onResize,
+  onRefresh
 }: SearchBarProps) => {
   return (
     <div className="h-16 bg-white border-b border-gray-200 flex items-center px-6 gap-4">
@@ -61,7 +63,7 @@ const SearchBar = ({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* View Toggle */}
+        {/* View Toggle
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="icon">
@@ -85,7 +87,12 @@ const SearchBar = ({
               Large Grid
             </DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu> */}
+
+        {/* Refresh */}
+        <Button variant="outline" size="icon" onClick={() => window.location.reload()}>
+          <Settings className="h-4 w-4" />
+        </Button>
 
       </div>
     </div>

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { GetImages, GetImageByFolders, UnTaggedImages } from "../wailsjs/go/main/App"
+import { GetImages, GetImageByFolders, UnTaggedImages, ScanFolder } from "../wailsjs/go/main/App"
 import Sidebar from './components/Sidebar';
 import { useStatusBar } from './hooks/useStatus';
 import SearchBar from './components/SearchBar';
 import ImageGrid from './components/ImageGrid';
 import BottomBar from './components/BottomBar';
+import { start } from 'repl';
 
 export type Activity = { id: string; label: string; detail?: string; status?: 'info' | 'success' | 'error' | 'warning' | 'running' | 'idle'; progress?: number;  startAt?: number; };
 
@@ -17,6 +18,7 @@ function AppContent() {
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
   const [images, setImages] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const { start, update, finish } = useStatusBar();
 
   // ✅ NOW it's legal to call the hook
   const { activities, clear } = useStatusBar();
@@ -68,9 +70,16 @@ function AppContent() {
     setImages(sortedImages);
   };
 
-  const handleResize = (size: "small" | "medium" | "large") => {
-    setGridSize(size);
-  };
+  const handleRefresh = () => {
+    start({ id: "Refreshing All Folders", label: `Refreshing All Folders` });
+    ScanFolder();
+    fetchImages(selectedFolder);
+    finish("Refreshing All Folders", true);
+  }
+
+  // const handleResize = (size: "small" | "medium" | "large") => {
+  //   setGridSize(size);
+  // };
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
@@ -88,7 +97,7 @@ function AppContent() {
             onSearchChange={setSearchQuery}
             isSidebarCollapsed={isSidebarCollapsed}
             onSort={handleSort}
-            onResize={handleResize}
+            onRefresh={handleRefresh}
           />
         </div>
 

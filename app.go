@@ -168,6 +168,8 @@ func (a *App) Startup(ctx context.Context) {
 		a.wg.Add(1)
 		go a.tagWorker(i)
 	}
+	
+	a.ScanFolder()
 
 	go a.startImageServer()
 	go func() {

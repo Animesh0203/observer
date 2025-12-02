@@ -132,7 +132,7 @@ func ensurePythonWorker() {
 
 			for j := range jobChan {
 				if j.unload {
-					success, err := unloadInternal() // calls unload_model in Python
+					err := unloadInternal() // calls unload_model in Python
 					j.reply <- jobReply{tags: nil, err: err}
 					continue
 				}
@@ -232,37 +232,43 @@ func Predict(imagePath string) ([]string, error) {
 }
 
 func unloadInternal() error {
-    modName := C.CString("tag")
-    defer C.free(unsafe.Pointer(modName))
+	modName := C.CString("tag")
+	defer C.free(unsafe.Pointer(modName))
 
-    module := C.pyImportModule(modName)
-    if module == nil {
-        return fmt.Errorf("cannot import tag.py")
-    }
-    defer C.pyDecRef(module)
+	module := C.pyImportModule(modName)
+	if module == nil {
+		C.pyErrPrint()
+		return fmt.Errorf("cannot import tag.py")
+	}
+	defer C.pyDecRef(module)
 
-    funcName := C.CString("unload_model")
-    defer C.free(unsafe.Pointer(funcName))
+	funcName := C.CString("unload_model")
+	defer C.free(unsafe.Pointer(funcName))
 
-    pyFunc := C.pyGetAttr(module, funcName)
-    if pyFunc == nil {
-        return fmt.Errorf("no unload_model() found")
-    }
-    defer C.pyDecRef(pyFunc)
+	pyFunc := C.pyGetAttr(module, funcName)
+	if pyFunc == nil {
+		C.pyErrPrint()
+		return fmt.Errorf("no unload_model() found")
+	}
+	defer C.pyDecRef(pyFunc)
 
-    args := C.Py_BuildValue(nil)
-    res := C.pyCallObject(pyFunc, args)
-    if res == nil {
-        return fmt.Errorf("Python unload_model() failed")
-    }
-    C.pyDecRef(res)
-    return nil
+	// No args: pass NULL as args
+	var args *C.PyObject = nil
+
+	res := C.pyCallObject(pyFunc, args)
+	if res == nil {
+		C.pyErrPrint()
+		return fmt.Errorf("Python unload_model() failed")
+	}
+	C.pyDecRef(res)
+
+	return nil
 }
 
 func UnloadModel() error {
-    ensurePythonWorker()
-    reply := make(chan jobReply)
-    jobChan <- job{unload: true, reply: reply}
-    resp := <-reply
-    return resp.err
+	ensurePythonWorker()
+	reply := make(chan jobReply)
+	jobChan <- job{unload: true, reply: reply}
+	resp := <-reply
+	return resp.err
 }
