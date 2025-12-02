@@ -17,7 +17,7 @@ import (
 	"time"
 	"unsafe"
 
-	// goruntime "runtime"
+	goruntime "runtime"
 	"sync"
 
 	"github.com/disintegration/imaging"
@@ -37,6 +37,9 @@ type App struct {
 
 	tagJobs chan string
 	wg      sync.WaitGroup
+
+	scanJobs chan string
+	scanWG   sync.WaitGroup
 }
 
 type ActivityEvent struct {
@@ -161,6 +164,14 @@ func (a *App) Startup(ctx context.Context) {
 	a.db = db
 	a.initDB()
 
+	scanWorkerCount := goruntime.NumCPU()
+	a.scanJobs = make(chan string, 512)
+
+	for i := 0; i < scanWorkerCount; i++ {
+		a.scanWG.Add(1)
+		go a.scanWorker(i)
+	}
+
 	workerCount := 1
 	a.tagJobs = make(chan string, 256)
 
@@ -168,7 +179,7 @@ func (a *App) Startup(ctx context.Context) {
 		a.wg.Add(1)
 		go a.tagWorker(i)
 	}
-	
+
 	a.ScanFolder()
 
 	go a.startImageServer()
@@ -182,6 +193,27 @@ func (a *App) Startup(ctx context.Context) {
 			Percent: 0,
 		})
 	}()
+}
+
+// scanWorker processes folders from the scanJobs channel
+func (a *App) scanWorker(workerID int) {
+	defer a.scanWG.Done()
+
+	for {
+		select {
+		case <-a.ctx.Done():
+			runtime.LogInfo(a.ctx, fmt.Sprintf("Scan worker %d stopped", workerID))
+			return
+
+		case folderPath, ok := <-a.scanJobs:
+			if !ok {
+				runtime.LogInfo(a.ctx, fmt.Sprintf("Scan worker %d channel closed", workerID))
+				return
+			}
+
+			a.ScanFolders(folderPath)
+		}
+	}
 }
 
 // tagWorker processes images from the tagJobs channel
@@ -366,12 +398,25 @@ func (a *App) ScanFolder() error {
 	}
 	defer rows.Close()
 
-	for rows.Next() {
-		var id int
-		var folderPath string
-		rows.Scan(&id, &folderPath)
-		a.ScanFolders(folderPath)
-	}
+	go func() {
+		for rows.Next() {
+			var id int
+			var folderPath string
+			if err := rows.Scan(&id, &folderPath); err != nil {
+				runtime.LogError(a.ctx, "ScanFolder: scan error: "+err.Error())
+				continue
+			}
+			
+			select {
+				case a.scanJobs <- folderPath:
+				
+				default:
+					go func(path string){
+						a.scanJobs <- path
+					}(folderPath)
+			}
+		}
+	}()
 	return nil
 }
 
