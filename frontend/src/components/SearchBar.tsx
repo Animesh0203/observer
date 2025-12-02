@@ -1,5 +1,5 @@
 // components/SearchBar.tsx
-import { Search, SlidersHorizontal, Grid3x3, LayoutGrid, Settings } from 'lucide-react';
+import { Search, SlidersHorizontal, Grid3x3, LayoutGrid, Settings, RefreshCcw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -91,7 +91,7 @@ const SearchBar = ({
 
         {/* Refresh */}
         <Button variant="outline" size="icon" onClick={() => window.location.reload()}>
-          <Settings className="h-4 w-4" />
+          <RefreshCcw className="h-4 w-4" />
         </Button>
 
       </div>

@@ -7,6 +7,8 @@ export function AddFolder(arg1:string,arg2:string):Promise<void>;
 
 export function CaptionImage(arg1:string,arg2:string):Promise<Array<string>>;
 
+export function DelModel():Promise<void>;
+
 export function GetFolders():Promise<Array<main.FolderData>>;
 
 export function GetImageByFolders(arg1:Array<string>):Promise<Array<main.ImageData>>;
@@ -34,5 +36,3 @@ export function TagAllUntagged():Promise<void>;
 export function TestActivity():Promise<void>;
 
 export function UnTaggedImages():Promise<Array<main.ImageData>>;
-
-export function DelModel():Promise<void>;
