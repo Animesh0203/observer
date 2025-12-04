@@ -1,10 +1,4 @@
 build/bin
 node_modules
 frontend/dist
-data/
-__pycache__
-data.db
-thumbnails/
-data.db-shm
-data.db-wal
-build-linux.yml
+tasks

@@ -6,7 +6,6 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
 //go:embed all:frontend/dist
@@ -18,20 +17,14 @@ func main() {
 
 	// Create application with options
 	err := wails.Run(&options.App{
-		Title:     "observer",
-		Width:     1024,
-		Height:    768,
-		MinHeight: 768,
-		MinWidth:  768,
+		Title:  "Wails Template",
+		Width:  1024,
+		Height: 768,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		Windows: &windows.Options{
-			Theme: windows.SystemDefault,
-		},
-		BackgroundColour:  &options.RGBA{R: 0, G: 0, B: 0, A: 1},
-		OnStartup:         app.Startup,
-		HideWindowOnClose: true,
+		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+		OnStartup:        app.startup,
 		Bind: []interface{}{
 			app,
 		},

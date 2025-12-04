@@ -1,406 +1,107 @@
-# 📦 **Observer**
+# README
 
-### *A fast, offline Windows application for automatically tagging, organizing, and browsing images using local machine learning.*
+## About
 
-![banner-placeholder](docs/banner.png)
+**A modern Wails desktop app template** featuring a modern stack:
+- **React** for UI
+- **TypeScript** for type safety
+- **Shadcn UI** for accessible, themeable components
+- **Biome** for code formatting and linting
+- **Wails** for desktop app development
+- **Go** for backend
 
----
+https://github.com/user-attachments/assets/3ca52ea6-9049-45bb-85b4-08715b96e1b3
 
-## 🔍 **Overview**
+</br>
 
-**Observer** is a Windows desktop application built in **Go** and **React** using the **Wails** framework.
-It provides **AI-powered offline image tagging**, allowing users to quickly search, browse, and organize large photo collections with zero cloud dependency.
 
-Observer is designed for:
 
-* 📸 **Photographers**
-* 🗂 **Screenshot hoarders**
-* 💼 **Professionals who manage image-heavy workflows**
-* 🔒 **Privacy-conscious users who want 100% offline ML**
 
-Using an optimized ONNX model (**EfficientNet-Lite4**), Observer generates fast and accurate descriptive labels for every image—all computed locally through an embedded Python environment.
 
----
+Wails is a framework for building desktop applications using Go for the backend and modern web technologies for the frontend. It enables you to create fast, native-feeling desktop apps with a seamless bridge between Go and JavaScript/TypeScript. Check official docs for more info: https://wails.io/docs/introduction
 
-# 🚀 **Features**
+You can configure the project by editing `wails.json`. More information about the project settings can be found
+here: https://wails.io/docs/reference/project-config
 
-## 🤖 **AI Auto-Tagging**
+## Live Development
 
-Observer uses **EfficientNet-Lite4 ONNX** + **ONNX Runtime (DirectML/GPU + CPU fallback)** to automatically tag images.
-Supports extracting the **top 5 predictions** per image.
-
-* Offline inference
-* GPU acceleration via DirectML when available
-* CPU fallback for any Windows machine
-* Fully embedded Python runtime (no external installation required)
-
----
-
-## 🗂️ **Smart Image Organization**
-
-* Scan folders recursively
-* Display all images in an interactive grid
-* Manage tagged vs untagged images
-* Efficient SQLite database storage
-* Real-time filtering and searching
-* Sort images by name, size, date created, date modified
-
----
-
-## ⚡ **High-Performance Local Thumbnailing**
-
-Observer generates local thumbnails using Go's image processing library.
-
-* No network
-* No external dependencies
-* Cached in `observer/thumbnails`
-* Auto-regenerated only when missing
-
----
-
-## 🔧 **Background Workers (Caption Workers)**
-
-Observer includes a built-in job system with:
-
-* Worker queue for image tagging
-* Parallel background workers
-* Persistent work until completion
-* Safe cancellation on app shutdown
-* Progress reporting to the UI
-
----
-
-## 📊 **VS Code–Style Activity Bar**
-
-![activity-bar](docs/activity.png)
-
-Built at the bottom of the UI, the Activity Bar shows:
-
-* Running / queued tasks
-* Progress bars
-* Success & error states
-* Logs
-* Time since last activity
-
-This makes long operations (tagging hundreds/thousands of images) fully transparent.
-
----
-
-## 🖼️ **Beautiful React UI**
-
-* Built with React + Vite
-* Responsive grid layout
-* Smooth scrolling
-* Sidebar navigation
-* Search bar with live filtering
-* Sort controls
-* Lazy-loaded thumbnails
-
----
-
-## 🔒 **100% Offline**
-
-Observer runs fully locally:
-
-* Embedded Python (via CPython 3.11)
-* Embedded ONNX model
-* No cloud calls
-* No network dependencies
-* No spyware, no tracking
-
-Perfect for privacy-focused workflows.
-
----
-
-# 🧠 **How It Works (Technical Overview)**
-
-## 🧱 Architecture Diagram
-
-```
-                +-----------------------------+
-                |          React UI           |
-                |  (Status Bar, Grid, etc.)   |
-                +-------------+---------------+
-                              |
-                              | Wails WebView Bridge
-                              v
-                +-----------------------------+
-                |            Go App           |
-                |   (Wails Backend Layer)     |
-                +-------------+---------------+
-                              |
-                    Worker Queue / Channels
-                              |
-                              v
-                +-----------------------------+
-                |      Caption Workers        |
-                |  Concurrent background jobs |
-                +-------------+---------------+
-                              |
-                              v
-          +---------------------------------------+
-          |         Embedded CPython 3.11         |
-          | (Predictor thread locked to 1 OS CPU) |
-          +--------------------+------------------+
-                               |
-                               v
-                  +-----------------------+
-                  |   ONNX Runtime (DML)  |
-                  | efficientnet-lite4    |
-                  +-----------------------+
-```
-
----
-
-## 🐍 Embedded Python
-
-Observer ships with:
-
-* Full CPython 3.11 runtime
-* Embedded stdlib
-* Embedded ONNXRuntime + DirectML
-* Your custom `tag.py` inference script
-* All site-packages copied into distribution
-
-The Go app communicates with Python using **CGo** and the CPython API.
-
-A dedicated Python worker thread is created via:
-
-```go
-runtime.LockOSThread()
-```
-
-This is required for calling ONNXRuntime from Python safely.
-
----
-
-## 🔮 EfficientNet-Lite4 Tagging Pipeline
-
-1. User scans a folder
-2. Workers find untagged images
-3. Path sent to a Python job channel
-4. Single Python thread loads image
-5. Preprocess → resize → normalize
-6. ONNX session runs the model
-7. Top-5 predictions returned
-8. SQLite database is updated
-9. UI activity bar is updated
-
-Every part is local, instant, and safe.
-
----
-
-# 📦 **Installation**
-
-Observer offers **three installation methods**.
-
----
-
-## 🧩 1. Install via MSI (Recommended)
-
-Download the latest installer from:
-
-👉 **Releases → observer-setup.msi**
-
-This installs:
-
-* Observer.exe
-* Embedded Python
-* ONNXRuntime
-* All required modules
-* Desktop shortcut
-* Uninstaller
-
----
-
-## 📦 2. Portable ZIP (Manual)
-
-If provided in releases:
-
-1. Download `observer-portable.zip`
-2. Extract anywhere
-3. Run `observer.exe`
-
-No installation needed.
-
----
-
-## 🔧 3. Build from Source
-
-### **Requirements**
-
-* Go 1.22+
-* Node.js + npm
-* Wails 2
-* MSVC build tools (Visual Studio Build Tools)
-* WiX Toolset (for MSI builds)
-* Python 3.11 (for development mode)
-
-### **Clone the repo**
+To run in live development mode, use:
 
 ```sh
-git clone https://github.com/Animesh0203/observer
-cd observer
+# install dependencies
+make deps
+
+# run in development mode
+make dev
 ```
 
-### **Run in development mode**
+This will start the app with hot reload for both frontend and backend. For frontend-only development in a browser (with access to Go methods), open http://localhost:34115 in your browser.
+
+## Building
+
+To build a redistributable, production mode package, use `make build-[os]`, where `os` is one of `windows`, `linux`, or `mac`.
+
+## Key Frontend Libraries
+
+This project utilizes a modern frontend stack:
+
+- [**React**](https://react.dev/): A JavaScript library for building user interfaces.
+- [**TypeScript**](https://www.typescriptlang.org/): A typed superset of JavaScript that compiles to plain JavaScript.
+- [**Vite**](https://vitejs.dev/): A fast build tool and development server.
+- [**Tailwind CSS**](https://tailwindcss.com/): A utility-first CSS framework for rapid UI development.
+- [**Shadcn UI**](https://ui.shadcn.com/): A collection of re-usable UI components built with Radix UI and Tailwind CSS.
+- [**Biome**](https://biomejs.dev/): A fast formatter and linter for web projects.
+- [**Radix UI**](https://www.radix-ui.com/): Primitives for building accessible design systems and web applications.
+
+### Common Shadcn UI Commands
+
+Use the following commands (from the `frontend` directory) to add new Shadcn UI components:
 
 ```sh
-wails dev
+npx shadcn-ui@latest add button
+npx shadcn-ui@latest add input
+npx shadcn-ui@latest add card
+# ...add any other supported component
 ```
 
-### **Build production binary**
+See the [Shadcn UI documentation](https://ui.shadcn.com/docs/components) for a full list of available components and usage instructions.
 
-```sh
-wails build
-```
+## Library Versions
 
----
+Below are the main library versions currently in use:
 
-# 🏗️ GitHub Actions Build Pipeline
+| Library                          | Version    |
+| -------------------------------- | ---------- |
+| react                            | ^18.3.1    |
+| react-dom                        | ^18.3.1    |
+| typescript                       | ^5.8.3     |
+| vite                             | ^6.3.5     |
+| @vitejs/plugin-react             | ^4.5.0     |
+| tailwindcss                      | ^4.1.8     |
+| @tailwindcss/vite                | ^4.1.8     |
+| tw-animate-css                   | ^1.3.3     |
+| class-variance-authority         | ^0.7.1     |
+| clsx                             | ^2.1.1     |
+| tailwind-merge                   | ^3.3.0     |
+| @radix-ui/react-aspect-ratio     | ^1.1.7     |
+| @radix-ui/react-dropdown-menu    | ^2.1.15    |
+| @radix-ui/react-slot             | ^1.2.3     |
+| lucide-react                     | ^0.511.0   |
+| next-themes                      | ^0.4.6     |
+| sonner                           | ^2.0.5     |
+| @biomejs/biome                   | ^1.9.4     |
 
-Observer uses a custom CI/CD workflow that:
 
-✔ Downloads full CPython
-✔ Installs ONNX dependencies
-✔ Copies site-packages into an embedded runtime
-✔ Copies tag.py & model
-✔ Builds Wails app using CGo
-✔ Packages everything into an MSI installer
+## Makefile Commands
 
-Automatic builds trigger on:
+The project includes a `Makefile` to simplify common development tasks. Run `make help` to see all available commands. Here are some of a few key targets:
 
-```yaml
-on:
-  push:
-    tags:
-      - "*"
-```
-
-So every Git tag produces a new binary release.
-
----
-
-# 📂 Project Structure
-
-```
-observer/
- ├ frontend/              # React UI
- ├ thumbnails/            # Thumbnail cache
- ├ Python/
- │  ├ Python/             # Embedded Python pkg (in build mode)
- │  │  ├ tag.py
- │  │  ├ efficientnet-lite4.onnx
- │  │  ├ labels_map.txt
- │  ├ site-packages/      # Copied packages
- ├ app.go                 
- ├ data.db                # SQLite database
- ├ installer/             # WiX installer files
- ├ wails.json
- └ README.md
-```
-
----
-
-# 🔍 Searching & Filtering
-
-Observer allows searching by:
-
-* 🤖 Tag
-* 📝 Filename
-* 🔖 Caption
-* 📅 Date created
-* 📅 Date modified
-* 📐 Size
-
-Sort modes include:
-
-* Name
-* Date Added
-* Date Modified
-* Size
-
----
-
-# 🛠 Developer Notes
-
-## ⚙ SQLite
-
-Images stored via `images` table:
-
-```
-id, name, path, folder_id, caption, thumbnail_path, created, modified, size
-```
-
-## ⚡ Worker Queue
-
-Uses:
-
-```go
-tagJobs chan string
-wg sync.WaitGroup
-```
-
-## 🧵 Python Worker
-
-Python jobs run **in one locked OS thread**:
-
-```go
-runtime.LockOSThread()
-C.pyInitialize()
-...
-C.pyFinalize()
-```
-
----
-
-# 🗓 Roadmap
-
-* [ ] Model switching (CLIP, MobileNet, etc.)
-* [ ] Custom tags
-* [ ] Duplicate image detection
-* [ ] Export/import metadata
-* [ ] Plugin system
-* [ ] Face tagging
-* [ ] Image embedding search (vector DB)
-* [ ] Dark/Light mode toggle
-
----
-
-# 🧾 License
-
-Choose one:
-
-* MIT (recommended)
-* Apache 2.0
-* GPLv3
-
----
-
-# ❤️ Acknowledgements
-
-* ONNX Runtime Team
-* EfficientNet researchers
-* Wails framework contributors
-* DirectML (Microsoft)
-* PIL, NumPy teams
-* Everyone contributing to free ML models
-
----
-
-# 🙌 Contributing
-
-Pull requests are welcome!
-You can contribute:
-
-* Bug fixes
-* UI improvements
-* New ML models
-* Documentation
-* Installer improvements
-
-Open an issue for any idea.
-
----
-
-# 🎉 **Thank You for Using Observer!**
+- `make dev`: Run the application in development mode with hot reloading.
+- `make build-windows`: Build the application for Windows (64-bit).
+- `make build-linux`: Build the application for Linux (64-bit).
+- `make build-mac`: Build the application for macOS (universal).
+- `make clean`: Clean build artifacts.
+- `make deps`: Install frontend dependencies from `package.json`.
+- `make lint`: Lint the frontend code using Biome.
+- `make format`: Format the frontend code using Biome.
+- `make check`: Check and apply automatic fixes to the frontend code using Biome.
