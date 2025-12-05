@@ -4,7 +4,8 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
+  --tw-bg-opacity: 0;
+  --background: rgba(0, 0, 0, 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
@@ -40,7 +41,7 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
+  --background: rgba(0, 0, 0, 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.145 0 0);
   --card-foreground: oklch(0.985 0 0);
@@ -113,11 +114,47 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
+@keyframes spotlightDrop {
+  0% {
+    opacity: 0;
+    transform: translateY(-40px) scale(0.98);
   }
-  body {
-    @apply bg-background text-foreground;
+  60% {
+    opacity: 1;
+    transform: translateY(0px) scale(1.02);
   }
+  100% {
+    opacity: 1;
+    transform: translateY(0px) scale(1);
+  }
+}
+
+@keyframes spotlightHide {
+  0% {
+    opacity: 1;
+    transform: translateY(0px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-40px) scale(0.98);
+  }
+}
+
+.spotlight-drop {
+  animation: spotlightDrop 220ms cubic-bezier(0.25, 0.8, 0.4, 1) forwards;
+}
+
+.spotlight-hide {
+  animation: spotlightHide 180ms cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
+}
+
+
+html, #root, #app {
+  background: transparent !important;
+}
+
+body {
+  backdrop-filter: blur(10px);
+background-color: rgba(0,0,0,0.2);
+
 }
