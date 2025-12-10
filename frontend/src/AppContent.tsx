@@ -5,7 +5,6 @@ import { useStatusBar } from './hooks/useStatus';
 import SearchBar from './components/SearchBar';
 import ImageGrid from './components/ImageGrid';
 import BottomBar from './components/BottomBar';
-import { start } from 'repl';
 
 export type Activity = { id: string; label: string; detail?: string; status?: 'info' | 'success' | 'error' | 'warning' | 'running' | 'idle'; progress?: number;  startAt?: number; };
 

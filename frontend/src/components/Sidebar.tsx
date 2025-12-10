@@ -6,7 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, Folder, Image, Star, Tag } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { AddFolder, GetFolders, ScanFolders, SelectFolder, TagAllUntagged, TestActivity } from "../../wailsjs/go/main/App";
+import { AddFolder, GetFolders, ScanFolders, SelectFolder, TagAllUntagged } from "../../wailsjs/go/main/App";
 import svg from "../assets/images/svg.svg";
 import { useStatusBar } from '../hooks/useStatus';
 

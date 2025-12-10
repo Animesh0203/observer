@@ -40,6 +40,8 @@ type App struct {
 
 	scanJobs chan string
 	scanWG   sync.WaitGroup
+
+	supervisor *inference.Supervisor
 }
 
 type ActivityEvent struct {
@@ -153,6 +155,10 @@ func (a *App) Startup(ctx context.Context) {
 		})
 	}()
 
+	// Intializing Supervisor
+	a.supervisor = inference.NewSupervisor()
+	a.supervisor.Start()
+	
 	// DB
 	if _, err := os.Stat("./"); os.IsNotExist(err) {
 		os.MkdirAll("./", 0755)
@@ -245,6 +251,7 @@ func (a *App) tagWorker(workerID int) {
 			})
 
 			tags := a.CaptionImage(imgPath, activityID)
+			// panic("Fuck Me")
 
 			// Finish or error is now handled inside CaptionImage (we’ll fix that next)
 			runtime.LogInfo(a.ctx, fmt.Sprintf("Tag worker %d finished: %s with tags %v", workerID, imgPath, tags))
@@ -503,7 +510,7 @@ func isImage(p string) bool {
 }
 
 func (a *App) CaptionImage(imagePath string, activityID string) []string {
-	// Predict
+	// Progress: Start
 	runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
 		ID:      activityID,
 		Status:  "progress",
@@ -512,19 +519,35 @@ func (a *App) CaptionImage(imagePath string, activityID string) []string {
 		Percent: 20,
 	})
 
-	tags, err := inference.Predict(imagePath)
+	// Typed supervisor call
+	msg, err := a.supervisor.Call("add_image", imagePath)
+	fmt.Println("WORKER MESSAGE:", msg)
 	if err != nil {
-		time.Sleep(5)
 		runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
 			ID:     activityID,
 			Status: "error",
 			Label:  "Captioning failed",
 			Detail: err.Error(),
 		})
-		return []string{}
+		return nil
 	}
 
-	// Save to DB
+	// Typed decode (no interface{} mess)
+	result, err := inference.DecodeCaptionResult(msg)
+	fmt.Println("DECODED RESULT:", result)
+	if err != nil {
+		runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
+			ID:     activityID,
+			Status: "error",
+			Label:  "Captioning failed",
+			Detail: "Invalid worker response",
+		})
+		return nil
+	}
+
+	tags := result.Tags
+	fmt.Println("CAPTION TAGS:", tags)
+	// Progress: Saving
 	runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
 		ID:      activityID,
 		Status:  "progress",
@@ -534,7 +557,13 @@ func (a *App) CaptionImage(imagePath string, activityID string) []string {
 	})
 
 	caption := strings.Join(tags, ",")
-	if _, err := a.db.Exec(`UPDATE images SET caption=? WHERE path=?`, caption, imagePath); err != nil {
+	fmt.Println("FINAL CAPTION STRING:", caption)
+
+	if _, err := a.db.Exec(
+		`UPDATE images SET caption=? WHERE path=?`,
+		caption,
+		imagePath,
+	); err != nil {
 		runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
 			ID:     activityID,
 			Status: "error",
@@ -555,6 +584,7 @@ func (a *App) CaptionImage(imagePath string, activityID string) []string {
 
 	return tags
 }
+
 
 func (a *App) QueueAllUntaggedForTagging() error {
 	runtime.LogInfo(a.ctx, "Queueing all untagged images for tagging")
@@ -783,6 +813,8 @@ func (a *App) Shutdown(ctx context.Context) {
 	if a.db != nil {
 		a.db.Close()
 	}
+
+	a.supervisor.Stop()
 }
 
 func (a *App) TestActivity() {
@@ -816,33 +848,3 @@ func (a *App) TestActivity() {
 	})
 }
 
-func (a *App) DelModel() error {
-	runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
-		ID:      "unload-model",
-		Status:  "start",
-		Label:   "Unloading model",
-		Detail:  "Releasing resources…",
-		Percent: 0,
-	})
-
-	time.Sleep(5)
-	err := inference.UnloadModel()
-	if err != nil {
-		runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
-			ID:     "unload-model",
-			Status: "error",
-			Label:  "Failed to unload model",
-			Detail: err.Error(),
-		})
-		return err
-	}
-
-	runtime.EventsEmit(a.ctx, "activity", ActivityEvent{
-		ID:      "unload-model",
-		Status:  "finish",
-		Label:   "Model unloaded",
-		Detail:  "Resources released successfully",
-		Percent: 100,
-	})
-	return nil
-}

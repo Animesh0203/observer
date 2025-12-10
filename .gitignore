@@ -8,3 +8,5 @@ thumbnails/
 data.db-shm
 data.db-wal
 build-linux.yml
+faiss_index.index
+faiss_mapping.json

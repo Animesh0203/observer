@@ -1,5 +1,8 @@
 import torch
 import torch.nn as nn
+import sys
+
+stdout = sys.stderr
 
 def train(model, train_loader, criterion, optimizer, val_loader):
     # Select device

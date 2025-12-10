@@ -1,6 +1,5 @@
 import React from "react";
 import type { Activity } from '../AppContent';
-import { DelModel } from '../../wailsjs/go/main/App';
 
 type Props = {
     activities?: Activity[];
@@ -99,9 +98,6 @@ export default function BottomBar({
 
       {/* RIGHT */}
       <div style={rightStyle}>
-        <button style={btnStyle} onClick={() => DelModel()}>
-          Unload Model
-        </button>
         <button style={btnStyle} onClick={() => setShowLogs(!showLogs)}>
           Logs
         </button>

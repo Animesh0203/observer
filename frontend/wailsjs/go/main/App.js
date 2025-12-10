@@ -10,10 +10,6 @@ export function CaptionImage(arg1, arg2) {
   return window['go']['main']['App']['CaptionImage'](arg1, arg2);
 }
 
-export function DelModel() {
-  return window['go']['main']['App']['DelModel']();
-}
-
 export function GetFolders() {
   return window['go']['main']['App']['GetFolders']();
 }

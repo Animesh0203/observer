@@ -4,11 +4,9 @@ import numpy as np
 
 BASE = os.path.dirname(__file__)
 
-# Try model in same folder (BUILD mode)
 MODEL_PATH = os.path.join(BASE, "efficientnet-lite4-11.onnx")
 LABELS_PATH = os.path.join(BASE, "labels_map.txt")
 
-# If missing, try parent folder (DEV mode)
 if not os.path.exists(MODEL_PATH):
     ALT_BASE = os.path.dirname(BASE)
     ALT_MODEL_PATH = os.path.join(ALT_BASE, "efficientnet-lite4-11.onnx")
@@ -17,23 +15,11 @@ if not os.path.exists(MODEL_PATH):
     if os.path.exists(ALT_MODEL_PATH):
         MODEL_PATH = ALT_MODEL_PATH
         LABELS_PATH = ALT_LABELS_PATH
-        print("📂 DEV MODE: Using parent directory for model")
-    else:
-        print("❌ MODEL NOT FOUND in both locations!")
-        print("Tried:", MODEL_PATH)
-        print("And:", ALT_MODEL_PATH)
-
-print("🔍 Using model at:", MODEL_PATH)
-print("🔍 Using labels at:", LABELS_PATH)
 
 
 # load labels once
 labels_json = json.load(open(LABELS_PATH))
 labels = [labels_json[str(i)] for i in range(len(labels_json))]
-
-# ----------------------------------------
-# PROVIDER SELECTION (GPU -> CPU fallback)
-# ----------------------------------------
 
 def available_provider():
     providers = ort.get_available_providers()
@@ -48,10 +34,6 @@ SESSION = ort.InferenceSession(
 
 input_name = SESSION.get_inputs()[0].name
 output_name = SESSION.get_outputs()[0].name
-
-# ----------------------------------------
-# IMAGE PREPROCESSING
-# ----------------------------------------
 
 def resize_with_aspectratio(img, target_height, target_width, scale=87.5):
     width, height = img.size
@@ -79,54 +61,13 @@ def preprocess(path):
     img = center_crop(img, 224, 224)
 
     arr = np.asarray(img).astype(np.float32)
-    arr = (arr - 127.0) / 128.0  # EfficientNet-lite normalization
+    arr = (arr - 127.0) / 128.0 
     arr = arr[np.newaxis, :, :, :]
     return arr
 
-# ----------------------------------------
-# MAIN PREDICT FUNCTION (called by Go)
-# ----------------------------------------
-
 def predict(image_path: str):
-    load_model()
     inp = preprocess(image_path)
     output = SESSION.run([output_name], {input_name: inp})[0].flatten()
 
     top5 = output.argsort()[-5:][::-1]
     return [labels[i] for i in top5]
-
-
-SESSION = None
-_model_loaded = False
-
-def load_model():
-    global SESSION, input_name, output_name, _model_loaded
-
-    if _model_loaded:
-        return  # already loaded
-
-    providers = available_provider()
-    SESSION = ort.InferenceSession(MODEL_PATH, providers=providers)
-
-    input_name = SESSION.get_inputs()[0].name
-    output_name = SESSION.get_outputs()[0].name
-
-    _model_loaded = True
-    print("🔵 Model loaded")
-
-
-def unload_model():
-    global SESSION, _model_loaded
-
-    if SESSION is not None:
-        print("🟡 Unloading model...")
-        SESSION = None  # remove reference
-        _model_loaded = False
-
-        import gc
-        gc.collect()
-        print("🟢 Model unloaded")
-
-        return True
-
-    return False
