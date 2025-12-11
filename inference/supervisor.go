@@ -10,21 +10,29 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"sync/atomic"
+	"path/filepath"
+	"syscall"
 	"time"
+	_ "embed"
 )
+
+func GetSharedWorkerDir() string {
+    base := os.Getenv("LOCALAPPDATA")
+    dir := filepath.Join(base, "ObserverAI")
+    os.MkdirAll(dir, 0755)
+    return dir
+}
 
 func writeMessage(stream io.Writer, message WorkerMessage) error {
 	data, err := json.Marshal(message)
 	if err != nil {
 		return err
 	}
-
 	length := uint32(len(data))
-	err = binary.Write(stream, binary.BigEndian, length)
-	if err != nil {
+	if err := binary.Write(stream, binary.BigEndian, length); err != nil {
 		return err
 	}
-
 	_, err = stream.Write(data)
 	return err
 }
@@ -40,19 +48,12 @@ func readMessage(stream io.Reader) (WorkerMessage, error) {
 		return WorkerMessage{}, err
 	}
 
-	// 🔎 Print raw framed JSON we received *immediately* so we know the bytes that arrived
-	log.Println("RAW FROM PYTHON (framed):", string(data))
-
-	// Decode generically into map so we can extract RawMessage fields reliably.
 	var tmp map[string]json.RawMessage
 	if err := json.Unmarshal(data, &tmp); err != nil {
-		log.Println("ERROR unmarshalling into tmp map:", err)
 		return WorkerMessage{}, err
 	}
 
 	var msg WorkerMessage
-
-	// Manually extract fields — preserved as bytes
 	if v, ok := tmp["id"]; ok {
 		_ = json.Unmarshal(v, &msg.ID)
 	}
@@ -65,26 +66,20 @@ func readMessage(stream io.Reader) (WorkerMessage, error) {
 	if v, ok := tmp["result"]; ok {
 		msg.Result = v
 	}
-
-	// 🔎 Print exactly what we will hand to callers
-	log.Println("✅ readMessage FINAL RESULT BYTES:", string(msg.Result))
-
 	return msg, nil
 }
 
 type Supervisor struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout io.ReadCloser
-
-	pending   map[int]chan WorkerMessage
-	pendingMu sync.RWMutex
-	nextID    int
-
-	writeMu sync.Mutex // PREVENT STREAM CORRUPTION
-
-	ctx    context.Context
-	cancel context.CancelFunc
+	cmd         *exec.Cmd
+	stdin       io.WriteCloser
+	stdout      io.ReadCloser
+	pending     map[int]chan WorkerMessage
+	pendingMu   sync.RWMutex
+	nextID      int
+	workerAlive atomic.Bool
+	writeMu     sync.Mutex
+	ctx         context.Context
+	cancel      context.CancelFunc
 }
 
 func NewSupervisor() *Supervisor {
@@ -97,81 +92,74 @@ func NewSupervisor() *Supervisor {
 }
 
 func (s *Supervisor) Start() error {
-	s.cmd = exec.Command("python", "-u", "D:\\Projects\\Machine_Learning\\observer\\observer-spot\\python\\worker.py")
+	
+	select {
+	case <-s.ctx.Done():
+		return fmt.Errorf("supervisor cancelled")
+	default:
+	}
 
-	var err error
-	s.stdin, err = s.cmd.StdinPipe()
+	workerDir := filepath.Join(os.Getenv("LOCALAPPDATA"), "ObserverAI")
+	workerPath := filepath.Join(workerDir, "./worker.exe")
+
+	s.cmd = exec.Command(workerPath)
+	s.cmd.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow: true,
+	}
+	s.cmd.SysProcAttr.CreationFlags = 0x08000000
+
+	stdin, err := s.cmd.StdinPipe()
 	if err != nil {
 		return err
 	}
-	s.stdout, err = s.cmd.StdoutPipe()
+	stdout, err := s.cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
 
-	// go func() {
-	// 	buf := make([]byte, 4096)
-	// 	for {
-	// 		n, err := s.stdout.Read(buf)
-	// 		if n > 0 {
-	// 			fmt.Println("🔥 RAW STDOUT BYTES RECEIVED:", n, "bytes:", string(buf[:n]))
-	// 		}
-	// 		if err != nil {
-	// 			fmt.Println("🔥 RAW STDOUT READ ERROR:", err)
-	// 			return
-	// 		}
-	// 	}
-	// }()
-
+	s.stdin = stdin
+	s.stdout = stdout
 	s.cmd.Stderr = os.Stderr
 
 	if err := s.cmd.Start(); err != nil {
 		return err
 	}
 
-	log.Printf("Supervisor: Child started (PID: %d)", s.cmd.Process.Pid)
+	s.workerAlive.Store(true)
+	log.Printf("Supervisor: Worker started (PID: %d)", s.cmd.Process.Pid)
 
 	go func() {
 		if err := s.readLoop(); err != nil {
 			log.Println(err)
 		}
 	}()
-
 	go s.monitorCrash()
 
 	return nil
 }
 
-// ------------------------
-// ASYNC READ LOOP
-// ------------------------
-
 func (s *Supervisor) readLoop() error {
 	for {
 		msg, err := readMessage(s.stdout)
 		if err != nil {
-			return fmt.Errorf("Supervisor: read error (most likely child crashed): %v", err)
+			return fmt.Errorf("Supervisor read error: %w", err)
 		}
 
 		s.pendingMu.RLock()
-		ch, exists := s.pending[msg.ID]
+		ch, ok := s.pending[msg.ID]
 		s.pendingMu.RUnlock()
-
-		if exists {
+		if ok {
 			ch <- msg
 		}
 	}
 }
 
-// ------------------------
-// CRASH MONITOR + RESTART
-// ------------------------
-
 func (s *Supervisor) monitorCrash() {
 	err := s.cmd.Wait()
-	log.Printf("Supervisor: Child crashed/exited: %v", err)
+	log.Printf("Supervisor: Worker exited: %v", err)
 
-	// Cancel pending calls
+	s.workerAlive.Store(false)
+
 	s.pendingMu.Lock()
 	for id, ch := range s.pending {
 		close(ch)
@@ -182,17 +170,36 @@ func (s *Supervisor) monitorCrash() {
 	select {
 	case <-s.ctx.Done():
 		return
-	case <-time.After(1 * time.Second):
-		log.Println("Supervisor: Restarting child...")
-		s.Start()
+	default:
+	}
+
+	backoff := time.Second
+	for {
+		log.Printf("Supervisor: Restarting in %s...", backoff)
+		time.Sleep(backoff)
+
+		select {
+		case <-s.ctx.Done():
+			return
+		default:
+		}
+
+		if err := s.Start(); err != nil {
+			log.Printf("Restart failed: %v", err)
+			if backoff < 30*time.Second {
+				backoff *= 2
+			}
+			continue
+		}
+		return
 	}
 }
 
-// ------------------------
-// SAFE CALL WITH TIMEOUT
-// ------------------------
-
 func (s *Supervisor) Call(method string, params interface{}) (WorkerMessage, error) {
+	if !s.workerAlive.Load() {
+		return WorkerMessage{}, fmt.Errorf("worker restarting")
+	}
+
 	s.pendingMu.Lock()
 	id := s.nextID
 	s.nextID++
@@ -200,9 +207,7 @@ func (s *Supervisor) Call(method string, params interface{}) (WorkerMessage, err
 	s.pending[id] = resChan
 	s.pendingMu.Unlock()
 
-	p, _ := json.Marshal(map[string]interface{}{
-		"image_path": params,
-	})
+	p, _ := json.Marshal(map[string]interface{}{"image_path": params})
 
 	req := WorkerMessage{
 		ID:     id,
@@ -210,7 +215,6 @@ func (s *Supervisor) Call(method string, params interface{}) (WorkerMessage, err
 		Params: p,
 	}
 
-	// WRITE IS MUTEX-PROTECTED
 	s.writeMu.Lock()
 	err := writeMessage(s.stdin, req)
 	s.writeMu.Unlock()
@@ -222,41 +226,34 @@ func (s *Supervisor) Call(method string, params interface{}) (WorkerMessage, err
 		return WorkerMessage{}, fmt.Errorf("write failed: %w", err)
 	}
 
-	// TIMEOUT PROTECTION
 	select {
-	case response, ok := <-resChan:
+	case resp, ok := <-resChan:
 		s.pendingMu.Lock()
 		delete(s.pending, id)
 		s.pendingMu.Unlock()
 
 		if !ok {
-			return WorkerMessage{}, fmt.Errorf("request cancelled (child crashed)")
+			return WorkerMessage{}, fmt.Errorf("worker crashed")
 		}
-		return response, nil
+		return resp, nil
 
-	case <-time.After(10 * time.Second):
+	case <-time.After(15 * time.Second):
 		s.pendingMu.Lock()
 		delete(s.pending, id)
 		s.pendingMu.Unlock()
-		return WorkerMessage{}, fmt.Errorf("request timed out")
+		return WorkerMessage{}, fmt.Errorf("timeout")
+
+	case <-s.ctx.Done():
+		s.pendingMu.Lock()
+		delete(s.pending, id)
+		s.pendingMu.Unlock()
+		return WorkerMessage{}, fmt.Errorf("shutdown")
 	}
 }
 
-// ------------------------
-// CLEAN SHUTDOWN
-// ------------------------
-
 func (s *Supervisor) Stop() {
-	// STOP AUTO-RESTART
 	s.cancel()
-
-	// PROTOCOL SHUTDOWN
-	_, err := s.Call("close", nil)
-	if err != nil {
-		log.Printf("Supervisor: error sending close: %v", err)
-	}
-
-	// SOFT KILL BACKUP
+	_, _ = s.Call("close", nil)
 	if s.cmd != nil && s.cmd.Process != nil {
 		_ = s.cmd.Process.Signal(os.Interrupt)
 	}

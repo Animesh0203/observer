@@ -2,23 +2,36 @@ import os, sys, json, onnxruntime as ort
 from PIL import Image
 import numpy as np
 
-BASE = os.path.dirname(__file__)
+APPDATA_DIR = os.path.join(os.getenv("LOCALAPPDATA"), "ObserverAI")
+MODEL_PATH = os.path.join(APPDATA_DIR, "models", "efficientnet-lite4-11.onnx")
+LABELS_PATH = os.path.join(APPDATA_DIR, "models", "labels_map.txt")
 
-MODEL_PATH = os.path.join(BASE, "efficientnet-lite4-11.onnx")
-LABELS_PATH = os.path.join(BASE, "labels_map.txt")
-
+# fallback to bundled if not found
 if not os.path.exists(MODEL_PATH):
-    ALT_BASE = os.path.dirname(BASE)
-    ALT_MODEL_PATH = os.path.join(ALT_BASE, "efficientnet-lite4-11.onnx")
-    ALT_LABELS_PATH = os.path.join(ALT_BASE, "labels_map.txt")
+    if hasattr(sys, "_MEIPASS"):
+        BASE = sys._MEIPASS
+    else:
+        BASE = os.path.dirname(__file__)
 
-    if os.path.exists(ALT_MODEL_PATH):
-        MODEL_PATH = ALT_MODEL_PATH
-        LABELS_PATH = ALT_LABELS_PATH
+    MODEL_PATH = os.path.join(BASE, "models", "efficientnet-lite4-11.onnx")
+    LABELS_PATH = os.path.join(BASE, "models", "labels_map.txt")
 
+def resource_path(relative_path):
+    """
+    Resolve file path for PyInstaller or normal execution.
+    """
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath(os.path.dirname(__file__)), relative_path)
 
-# load labels once
-labels_json = json.load(open(LABELS_PATH))
+# PyInstaller-safe model/label paths
+MODEL_PATH  = resource_path("efficientnet-lite4-11.onnx")
+LABELS_PATH = resource_path("labels_map.txt")
+
+# Load labels
+with open(LABELS_PATH, "r", encoding="utf-8") as f:
+    labels_json = json.load(f)
+
 labels = [labels_json[str(i)] for i in range(len(labels_json))]
 
 def available_provider():
@@ -68,6 +81,5 @@ def preprocess(path):
 def predict(image_path: str):
     inp = preprocess(image_path)
     output = SESSION.run([output_name], {input_name: inp})[0].flatten()
-
     top5 = output.argsort()[-5:][::-1]
     return [labels[i] for i in top5]

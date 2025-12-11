@@ -2,6 +2,7 @@ import os
 from phash import phash_image, phash_to_64d_vector
 from tag import predict
 from faiss_engine import FaissEngine
+import sys
 
 engine = FaissEngine()
 
@@ -9,8 +10,10 @@ def handle_action(action: str, image_path: str | None) -> dict:
 
     if action == "close":
         engine._save()
-        return {"message": "Worker shutting down"}
-
+        sys.stderr.write("Python Worker: Received close signal\n")
+        sys.stderr.flush()
+        return {"message": "Worker is closing"}  
+    
     if action == "health_check":
         return {"message": "healthy"}
 

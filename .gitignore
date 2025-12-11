@@ -10,3 +10,7 @@ data.db-wal
 build-linux.yml
 faiss_index.index
 faiss_mapping.json
+worker.exe
+installer/ObserverSetup.exe
+python/worker.spec
+python/build

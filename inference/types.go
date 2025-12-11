@@ -18,7 +18,7 @@ type StatusResult struct {
 
 type WorkerMessage struct {
 	ID     int             `json:"id"`
-	Action string          `json:"action,omitempty"`
+	Action string          `json:"action"`
 	Params json.RawMessage `json:"params,omitempty"`
 	Result json.RawMessage `json:"result,omitempty"`
 }
