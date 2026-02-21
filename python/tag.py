@@ -16,6 +16,7 @@ if not os.path.exists(MODEL_PATH):
     MODEL_PATH = os.path.join(BASE, "models", "efficientnet-lite4-11.onnx")
     LABELS_PATH = os.path.join(BASE, "models", "labels_map.txt")
 
+
 def resource_path(relative_path):
     """
     Resolve file path for PyInstaller or normal execution.
